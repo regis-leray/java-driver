@@ -11,6 +11,7 @@
 - [bug] JAVA-960: Avoid race in control connection shutdown.
 - [bug] JAVA-656: Fix NPE in ControlConnection.updateLocationInfo.
 - [improvement] JAVA-652: Add DCAwareRoundRobinPolicy builder.
+- [improvement] JAVA-808: Add generic filtering policy that can be used to exclude specific DCs.
 
 
 ### 2.0.11
