@@ -19,17 +19,80 @@ import java.util.*;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterators;
+import org.jgrapht.graph.DefaultDirectedGraph;
+import org.jgrapht.graph.DefaultEdge;
+import org.jgrapht.traverse.TopologicalOrderIterator;
 
 /**
  * A User Defined Type (UDT).
  * <p>
  * A UDT is a essentially a named collection of fields (with a name and a type).
  */
-public class UserType extends DataType implements Iterable<UserType.Field>{
+public class UserType extends DataType implements Iterable<UserType.Field> {
 
     private static final String TYPE_NAME  = "type_name";
     private static final String COLS_NAMES = "field_names";
     private static final String COLS_TYPES = "field_types";
+
+    // for C* 3+, user type resolution must be done in proper order
+    // to guarantee that nested UDTs get resolved
+    static class UserTypeDependencyGraph {
+
+        private final Metadata metadata;
+        private final DefaultDirectedGraph<Row, DefaultEdge> graph;
+
+        // note that rows must contain ALL UDTs for a given keyspace
+        UserTypeDependencyGraph(List<Row> rows, Metadata metadata) {
+            this.metadata = metadata;
+            graph = new DefaultDirectedGraph<Row, DefaultEdge>(DefaultEdge.class);
+            for (Row row : rows) {
+                graph.addVertex(row);
+            }
+            for (Row row1 : rows) {
+                for (Row row2 : rows) {
+                    if (row1 != row2 && dependsOn(row1, row2))
+                        graph.addEdge(row2, row1);
+                }
+            }
+        }
+
+        TopologicalOrderIterator<Row, DefaultEdge> topologicalIterator() {
+            return new TopologicalOrderIterator<Row, DefaultEdge>(graph);
+        }
+
+        private boolean dependsOn(Row udt1, Row udt2) {
+            List<String> fieldTypes = udt1.getList(UserType.COLS_TYPES, String.class);
+            String typeName = Metadata.escapeId(udt2.getString(UserType.TYPE_NAME));
+            for (String fieldTypeStr : fieldTypes) {
+                // this will parse udts as custom types, which is what we want here
+                DataType fieldType = DataTypeParser.parse(fieldTypeStr, metadata, null, false);
+                if (references(fieldType, typeName))
+                    return true;
+            }
+            return false;
+        }
+
+        private boolean references(DataType dataType, String typeName) {
+            if (dataType instanceof CustomType) {
+                String customName = ((CustomType)dataType).getCustomTypeClassName();
+                if (typeName.equals(customName))
+                    return true;
+            }
+            for (DataType arg : dataType.getTypeArguments()) {
+                if (references(arg, typeName))
+                    return true;
+            }
+            if (dataType instanceof TupleType) {
+                for (DataType arg : ((TupleType)dataType).getComponentTypes()) {
+                    if (references(arg, typeName))
+                        return true;
+                }
+            }
+            // dataType cannot be UserType
+            return false;
+        }
+
+    }
 
     private final String keyspace;
     private final String typeName;
@@ -62,7 +125,10 @@ public class UserType extends DataType implements Iterable<UserType.Field>{
         this.byName = builder.build();
     }
 
-    static UserType build(Row row, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
+    static UserType build(Row row, VersionNumber version, Cluster cluster, Map<String, UserType> userTypes) {
+        ProtocolVersion protocolVersion = cluster.getConfiguration().getProtocolOptions().getProtocolVersion();
+        CodecRegistry codecRegistry = cluster.getConfiguration().getCodecRegistry();
+
         String keyspace = row.getString(KeyspaceMetadata.KS_NAME);
         String name = row.getString(TYPE_NAME);
 
@@ -70,9 +136,15 @@ public class UserType extends DataType implements Iterable<UserType.Field>{
         List<String> fieldTypes = row.getList(COLS_TYPES, String.class);
 
         List<Field> fields = new ArrayList<Field>(fieldNames.size());
-        for (int i = 0; i < fieldNames.size(); i++)
-            fields.add(new Field(fieldNames.get(i), CassandraTypeParser.parseOne(fieldTypes.get(i), protocolVersion, codecRegistry)));
-
+        for (int i = 0; i < fieldNames.size(); i++) {
+            DataType fieldType;
+            if (version.getMajor() >= 3.0) {
+                fieldType = DataTypeParser.parse(fieldTypes.get(i), cluster.getMetadata(), userTypes, false);
+            } else {
+                fieldType = CassandraTypeParser.parseOne(fieldTypes.get(i), protocolVersion, codecRegistry);
+            }
+            fields.add(new Field(fieldNames.get(i), fieldType));
+        }
         return new UserType(keyspace, name, fields, protocolVersion, codecRegistry);
     }
 
@@ -180,7 +252,7 @@ public class UserType extends DataType implements Iterable<UserType.Field>{
 
     @Override
     public final boolean equals(Object o) {
-        if(!(o instanceof UserType))
+        if (!(o instanceof UserType))
             return false;
 
         UserType other = (UserType)o;
@@ -301,7 +373,7 @@ public class UserType extends DataType implements Iterable<UserType.Field>{
 
         @Override
         public final boolean equals(Object o) {
-            if(!(o instanceof Field))
+            if (!(o instanceof Field))
                 return false;
 
             Field other = (Field)o;
