@@ -5,6 +5,7 @@
 - [improvement] Make TableOrView.Order visible (JAVA-958)
 - [improvement] Update metrics to the latest version (JAVA-968)
 - [improvement] Improve error handling for when a non-type 1 UUID is given to bind() on a timeuuid column (JAVA-965)
+- [bug] Make type codecs invariant (JAVA-971)
 
 ### 3.0.0-alpha4
 
