@@ -7,6 +7,7 @@
 - [improvement] Improve error handling for when a non-type 1 UUID is given to bind() on a timeuuid column (JAVA-965)
 - [improvement] Pass the authenticator name from the server to the auth provider (JAVA-885) 
 - [new feature] Provide custom codecs library as an extra module (JAVA-846)
+- [new feature] Codec Support for JSON (JAVA-742)
 
 ### 3.0.0-alpha4
 
