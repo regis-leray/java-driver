@@ -172,13 +172,6 @@ public class TypeCodecTest {
     }
 
     @Test(groups = "unit")
-    public void test_enum() {
-        EnumStringCodec<FooBarQix> codec = new EnumStringCodec<FooBarQix>(FooBarQix.class);
-        assertThat(codec)
-            .canSerialize(FooBarQix.FOO);
-    }
-
-    @Test(groups = "unit")
     public void test_inheritance() {
         CodecRegistry codecRegistry = new CodecRegistry();
         ACodec aCodec = new ACodec();
@@ -357,10 +350,6 @@ public class TypeCodecTest {
         public int hashCode() {
             return Objects.hashCode(id, name);
         }
-    }
-
-    enum FooBarQix {
-        FOO, BAR, QIX
     }
 
     class A {
