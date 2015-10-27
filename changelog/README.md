@@ -9,6 +9,7 @@
 - [new feature] Provide custom codecs library as an extra module (JAVA-846)
 - [new feature] Codec Support for JSON (JAVA-742)
 - [new feature] Codec support for Java 8 (JAVA-606)
+- [new feature] Codec support for Java arrays (JAVA-565)
 
 ### 3.0.0-alpha4
 
