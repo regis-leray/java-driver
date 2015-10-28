@@ -85,7 +85,7 @@ public class JacksonJsonCodec<T> extends TypeCodec<T> {
     @Override
     @SuppressWarnings("unchecked")
     public T parse(String value) throws InvalidTypeException {
-        if (value == null || value.isEmpty() || value.equals("NULL"))
+        if (value == null || value.isEmpty() || value.equalsIgnoreCase("NULL"))
             return null;
         if (!ParseUtils.isQuoted(value))
             throw new InvalidTypeException("JSON strings must be enclosed by single quotes");
