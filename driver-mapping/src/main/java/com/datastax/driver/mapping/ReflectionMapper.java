@@ -150,10 +150,6 @@ class ReflectionMapper<T> extends EntityMapper<T> {
             try {
                 PropertyDescriptor pd = new PropertyDescriptor(fieldName, field.getDeclaringClass());
 
-                if (field.getType().isEnum()) {
-                    return new EnumMapper<T>(field, position, pd, AnnotationParser.enumType(field), columnCounter);
-                }
-
                 for (Class<?> udt : TypeMappings.findUDTs(field.getGenericType()))
                     mappingManager.getUDTCodec(udt);
 

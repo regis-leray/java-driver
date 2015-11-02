@@ -10,6 +10,7 @@
 - [new feature] Codec Support for JSON (JAVA-742)
 - [new feature] Codec support for Java 8 (JAVA-606)
 - [new feature] Codec support for Java arrays (JAVA-565)
+- [new feature] Codec support for Java enums (JAVA-605)
 
 ### 3.0.0-alpha4
 
