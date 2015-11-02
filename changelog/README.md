@@ -6,6 +6,7 @@
 - [improvement] JAVA-968: Update metrics to the latest version.
 - [improvement] JAVA-841: Refactor SSLOptions API.
 - [improvement] JAVA-948: Don't limit cipher suites by default.
+- [improvement] JAVA-917: Document SSL configuration.
 
 
 ### 3.0.0-alpha4
