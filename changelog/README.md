@@ -10,6 +10,7 @@
 - [bug] JAVA-901: Move call to connection.release() out of cancelHandler.
 - [bug] JAVA-960: Avoid race in control connection shutdown.
 - [bug] JAVA-656: Fix NPE in ControlConnection.updateLocationInfo.
+- [improvement] JAVA-917: Document SSL configuration.
 
 
 ### 2.0.11
