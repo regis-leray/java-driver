@@ -398,7 +398,7 @@ class Connection {
             if (Host.statesLogger.isTraceEnabled())
                 Host.statesLogger.trace("Defuncting " + this, e);
             else if (Host.statesLogger.isDebugEnabled())
-                Host.statesLogger.debug("Defuncting {} because: {}", this, e.getMessage());
+                Host.statesLogger.debug("Defuncting {} because: {}", this, e);
 
             // Force the connection to close to make sure the future completes. Otherwise force() might never get called and
             // threads will wait on the future forever.

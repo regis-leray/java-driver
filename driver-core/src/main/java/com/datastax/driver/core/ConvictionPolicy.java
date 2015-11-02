@@ -90,12 +90,23 @@ abstract class ConvictionPolicy {
         @Override
         void signalConnectionClosed(Connection connection) {
             int remaining = openConnections.decrementAndGet();
+            try {
+                throw new Exception("");
+            } catch (Exception e) {
+                Host.statesLogger.debug("Signalling {} as closed.", connection, e);
+            }
             assert remaining >= 0;
             Host.statesLogger.debug("[{}] {} closed, remaining = {}", host, connection, remaining);
         }
 
         @Override
         boolean signalConnectionFailure(Connection connection) {
+            try {
+                throw new Exception("");
+            } catch (Exception e) {
+                Host.statesLogger.debug("Signalling {} as failed.", connection, e);
+            }
+
             if (host.state != Host.State.DOWN)
                 updateReconnectionTime();
 
