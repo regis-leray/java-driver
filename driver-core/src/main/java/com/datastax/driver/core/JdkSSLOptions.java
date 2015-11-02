@@ -15,9 +15,7 @@
  */
 package com.datastax.driver.core;
 
-import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.ssl.SslHandler;
@@ -62,12 +60,8 @@ public class JdkSSLOptions implements SSLOptions {
 
     private static SSLContext makeDefaultContext() throws IllegalStateException {
         try {
-            SSLContext ctx = SSLContext.getInstance("TLS");
-            ctx.init(null, null, null); // use defaults
-            return ctx;
+            return SSLContext.getDefault();
         } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("This JVM doesn't support TLS, this shouldn't happen");
-        } catch (KeyManagementException e) {
             throw new IllegalStateException("Cannot initialize SSL Context", e);
         }
     }
