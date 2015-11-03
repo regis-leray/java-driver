@@ -13,9 +13,9 @@ build:
     properties: |
       com.datastax.driver.TEST_BASE_NODE_WAIT=120
       com.datastax.driver.NEW_NODE_DELAY_SECONDS=100
+      ccm.java.home=$CCM_JAVA_HOME
       cassandra.version=$CCM_CASSANDRA_VERSION
       cassandra.branch="github:iamaleksey/10365"
-      ccm.java.home=$CCM_JAVA_HOME
   - xunit:
     - "**/target/surefire-reports/TEST-*.xml"
     - "**/target/failsafe-reports/TEST-*.xml" 
