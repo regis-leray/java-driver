@@ -393,33 +393,18 @@ class Connection {
     }
 
     <E extends Exception> E defunct(E e) {
-        if (!isDefunct.compareAndSet(false, true))
-            return e;
+        if (isDefunct.compareAndSet(false, true)) {
 
-        if (Host.statesLogger.isTraceEnabled())
-            Host.statesLogger.trace("Defuncting " + this, e);
-        else if (Host.statesLogger.isDebugEnabled())
-            Host.statesLogger.debug("Defuncting {} because: {}", this, e.getMessage());
+            if (Host.statesLogger.isTraceEnabled())
+                Host.statesLogger.trace("Defuncting " + this, e);
+            else if (Host.statesLogger.isDebugEnabled())
+                Host.statesLogger.debug("Defuncting {} because: {}", this, e.getMessage());
 
-        ConnectionException ce = e instanceof ConnectionException
-                               ? (ConnectionException)e
-                               : new ConnectionException(address, "Connection problem", e);
-
-        Host host = factory.manager.metadata.getHost(address);
-        if (host != null) {
-            boolean isDown = factory.manager.signalConnectionFailure(host, this, host.wasJustAdded());
-
-            if (!isDown)
-                notifyOwnerWhenDefunct();
-            // else the driver will destroy all pools and notify the control connection as part of marking the host down,
-            // so no need to notify
+            // Force the connection to close to make sure the future completes. Otherwise force() might never get called and
+            // threads will wait on the future forever.
+            // (this also errors out pending handlers)
+            closeAsync().force();
         }
-
-        // Force the connection to close to make sure the future completes. Otherwise force() might never get called and
-        // threads will wait on the future forever.
-        // (this also errors out pending handlers)
-        closeAsync().force();
-
         return e;
     }
 
@@ -628,10 +613,18 @@ class Connection {
 
         logger.debug("{} closing connection", this);
 
-        if (!isDefunct.get()) {
-            Host host = factory.manager.metadata.getHost(address);
-            if(host != null)
+        Host host = factory.manager.metadata.getHost(address);
+        if (host != null) {
+            if (isDefunct.get()) {
+                boolean isDown = factory.manager.signalConnectionFailure(host, this, host.wasJustAdded());
+
+                if (!isDown)
+                    notifyOwnerWhenDefunct();
+                // else the driver will destroy all pools and notify the control connection as part of marking the host down,
+                // so no need to notify
+            } else {
                 host.convictionPolicy.signalConnectionClosed(this);
+            }
         }
 
         boolean terminated = tryTerminate(false);
