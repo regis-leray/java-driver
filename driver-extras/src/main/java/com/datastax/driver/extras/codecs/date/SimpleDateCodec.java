@@ -26,6 +26,7 @@ import com.datastax.driver.core.exceptions.InvalidTypeException;
 
 import static com.datastax.driver.core.CodecUtils.fromCqlDateToDaysSinceEpoch;
 import static com.datastax.driver.core.CodecUtils.fromDaysSinceEpochToCqlDate;
+import static com.datastax.driver.core.CodecUtils.fromSignedToUnsignedInt;
 import static com.datastax.driver.core.CodecUtils.fromUnsignedToSignedInt;
 import static com.datastax.driver.core.ParseUtils.isLongLiteral;
 import static com.datastax.driver.core.ParseUtils.isQuoted;
@@ -59,7 +60,7 @@ public class SimpleDateCodec extends TypeCodec.PrimitiveIntCodec {
 
     @Override
     public ByteBuffer serializeNoBoxing(int value, ProtocolVersion protocolVersion) {
-        return cint().serializeNoBoxing(CodecUtils.fromSignedToUnsignedInt(value), protocolVersion);
+        return cint().serializeNoBoxing(fromSignedToUnsignedInt(value), protocolVersion);
     }
 
     @Override

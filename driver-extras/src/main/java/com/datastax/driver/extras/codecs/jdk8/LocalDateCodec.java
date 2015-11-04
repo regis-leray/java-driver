@@ -24,6 +24,10 @@ import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
 import com.datastax.driver.core.*;
 import com.datastax.driver.core.exceptions.InvalidTypeException;
 
+import static com.datastax.driver.core.CodecUtils.fromCqlDateToDaysSinceEpoch;
+import static com.datastax.driver.core.CodecUtils.fromSignedToUnsignedInt;
+import static com.datastax.driver.core.CodecUtils.fromUnsignedToSignedInt;
+
 /**
  * {@link TypeCodec} that maps
  * {@link java.time.LocalDate} to CQL <code>date</code> columns.
@@ -43,7 +47,7 @@ public class LocalDateCodec extends TypeCodec<LocalDate> {
         if (value == null)
             return null;
         long days = ChronoUnit.DAYS.between(EPOCH, value);
-        int unsigned = CodecUtils.fromSignedToUnsignedInt((int) days);
+        int unsigned = fromSignedToUnsignedInt((int) days);
         return cint().serializeNoBoxing(unsigned, protocolVersion);
     }
 
@@ -52,7 +56,7 @@ public class LocalDateCodec extends TypeCodec<LocalDate> {
         if (bytes == null || bytes.remaining() == 0)
             return null;
         int unsigned = cint().deserializeNoBoxing(bytes, protocolVersion);
-        int signed = CodecUtils.fromUnsignedToSignedInt(unsigned);
+        int signed = fromUnsignedToSignedInt(unsigned);
         return EPOCH.plusDays(signed);
     }
 
@@ -82,7 +86,7 @@ public class LocalDateCodec extends TypeCodec<LocalDate> {
             }
             int days;
             try {
-                days = CodecUtils.fromCqlDateToDaysSinceEpoch(raw);
+                days = fromCqlDateToDaysSinceEpoch(raw);
             } catch (IllegalArgumentException e) {
                 throw new InvalidTypeException(String.format("Cannot parse date value from \"%s\"", value));
             }

@@ -1661,7 +1661,7 @@ public abstract class TypeCodec<T> {
 
         protected final TypeCodec<E> eltCodec;
 
-        public AbstractCollectionCodec(CollectionType cqlType, TypeToken<C> javaType, TypeCodec<E> eltCodec) {
+        protected AbstractCollectionCodec(CollectionType cqlType, TypeToken<C> javaType, TypeCodec<E> eltCodec) {
             super(cqlType, javaType);
             checkArgument(cqlType.getName() == Name.LIST || cqlType.getName() == Name.SET, "Expecting list or set type, got %s", cqlType);
             this.eltCodec = eltCodec;
@@ -1837,15 +1837,15 @@ public abstract class TypeCodec<T> {
     }
 
     /**
-     * Base class for codec mapping CQL {@link DataType#map(DataType, DataType) maps} to a Java {@link Map}.
+     * Base class for codecs mapping CQL {@link DataType#map(DataType, DataType) maps} to a Java {@link Map}.
      */
     public abstract static class AbstractMapCodec<K, V> extends TypeCodec<Map<K, V>> {
 
-        private final TypeCodec<K> keyCodec;
+        protected final TypeCodec<K> keyCodec;
 
-        private final TypeCodec<V> valueCodec;
+        protected final TypeCodec<V> valueCodec;
 
-        public AbstractMapCodec(TypeCodec<K> keyCodec, TypeCodec<V> valueCodec) {
+        protected AbstractMapCodec(TypeCodec<K> keyCodec, TypeCodec<V> valueCodec) {
             super(DataType.map(keyCodec.getCqlType(), valueCodec.getCqlType()), mapOf(keyCodec.getJavaType(), valueCodec.getJavaType()));
             this.keyCodec = keyCodec;
             this.valueCodec = valueCodec;
@@ -2016,7 +2016,7 @@ public abstract class TypeCodec<T> {
     }
 
     /**
-     * This codec maps a CQL {@link UserType user-defined type} (UDT) to a Java object.
+     * Base class for codecs mapping CQL {@link UserType user-defined types} (UDTs) to Java objects.
      * It can serve as a base class for codecs dealing with
      * direct UDT-to-Pojo mappings.
      *
@@ -2026,12 +2026,12 @@ public abstract class TypeCodec<T> {
 
         protected final UserType definition;
 
-        public AbstractUDTCodec(UserType definition, Class<T> javaClass) {
+        protected AbstractUDTCodec(UserType definition, Class<T> javaClass) {
             super(definition, javaClass);
             this.definition = definition;
         }
 
-        public AbstractUDTCodec(UserType definition, TypeToken<T> javaType) {
+        protected AbstractUDTCodec(UserType definition, TypeToken<T> javaType) {
             super(definition, javaType);
             this.definition = definition;
         }
@@ -2243,7 +2243,7 @@ public abstract class TypeCodec<T> {
     }
 
     /**
-     * This codec maps a CQL {@link TupleType tuple} to a a Java object.
+     * Base class for codecs mapping CQL {@link TupleType tuples} to Java objects.
      * It can serve as a base class for codecs dealing with
      * direct tuple-to-Pojo mappings.
 
@@ -2253,12 +2253,12 @@ public abstract class TypeCodec<T> {
 
         protected final TupleType definition;
 
-        public AbstractTupleCodec(TupleType definition, Class<T> javaClass) {
+        protected AbstractTupleCodec(TupleType definition, Class<T> javaClass) {
             super(definition, javaClass);
             this.definition = definition;
         }
 
-        public AbstractTupleCodec(TupleType definition, TypeToken<T> javaType) {
+        protected AbstractTupleCodec(TupleType definition, TypeToken<T> javaType) {
             super(definition, javaType);
             this.definition = definition;
         }

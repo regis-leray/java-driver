@@ -22,10 +22,17 @@ import org.joda.time.LocalDate;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 
+import static org.joda.time.Days.daysBetween;
+
 import com.datastax.driver.core.*;
 import com.datastax.driver.core.exceptions.InvalidTypeException;
 
+import static com.datastax.driver.core.CodecUtils.fromCqlDateToDaysSinceEpoch;
+import static com.datastax.driver.core.CodecUtils.fromSignedToUnsignedInt;
+import static com.datastax.driver.core.CodecUtils.fromUnsignedToSignedInt;
+import static com.datastax.driver.core.ParseUtils.isQuoted;
 import static com.datastax.driver.core.ParseUtils.quote;
+import static com.datastax.driver.core.ParseUtils.unquote;
 
 /**
  * {@link TypeCodec} that maps
@@ -47,8 +54,8 @@ public class LocalDateCodec extends TypeCodec<LocalDate> {
     public ByteBuffer serialize(LocalDate value, ProtocolVersion protocolVersion) {
         if (value == null)
             return null;
-        Days days = Days.daysBetween(EPOCH, value);
-        int unsigned = CodecUtils.fromSignedToUnsignedInt(days.getDays());
+        Days days = daysBetween(EPOCH, value);
+        int unsigned = fromSignedToUnsignedInt(days.getDays());
         return cint().serializeNoBoxing(unsigned, protocolVersion);
     }
 
@@ -57,7 +64,7 @@ public class LocalDateCodec extends TypeCodec<LocalDate> {
         if (bytes == null || bytes.remaining() == 0)
             return null;
         int unsigned = cint().deserializeNoBoxing(bytes, protocolVersion);
-        int signed = CodecUtils.fromUnsignedToSignedInt(unsigned);
+        int signed = fromUnsignedToSignedInt(unsigned);
         return EPOCH.plusDays(signed);
     }
 
@@ -75,8 +82,9 @@ public class LocalDateCodec extends TypeCodec<LocalDate> {
 
         // single quotes are optional for long literals, mandatory for date patterns
         // strip enclosing single quotes, if any
-        if (ParseUtils.isQuoted(value))
-            value = ParseUtils.unquote(value);
+        if (isQuoted(value)) {
+            value = unquote(value);
+        }
 
         if (ParseUtils.isLongLiteral(value)) {
             long raw;
@@ -87,7 +95,7 @@ public class LocalDateCodec extends TypeCodec<LocalDate> {
             }
             int days;
             try {
-                days = CodecUtils.fromCqlDateToDaysSinceEpoch(raw);
+                days = fromCqlDateToDaysSinceEpoch(raw);
             } catch (IllegalArgumentException e) {
                 throw new InvalidTypeException(String.format("Cannot parse date value from \"%s\"", value));
             }
