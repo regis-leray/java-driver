@@ -19,9 +19,6 @@ import java.util.*;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterators;
-import org.jgrapht.graph.DefaultDirectedGraph;
-import org.jgrapht.graph.DefaultEdge;
-import org.jgrapht.traverse.TopologicalOrderIterator;
 
 /**
  * A User Defined Type (UDT).
@@ -36,46 +33,70 @@ public class UserType extends DataType implements Iterable<UserType.Field> {
 
     // for C* 3+, user type resolution must be done in proper order
     // to guarantee that nested UDTs get resolved
-    static class UserTypeDependencyGraph {
+    static class UserTypeDependencyGraph implements Iterable<Row> {
 
-        private final Metadata metadata;
-        private final DefaultDirectedGraph<Row, DefaultEdge> graph;
+        private final Cluster cluster;
+        private final KeyspaceMetadata keyspace;
+        private final List<Vertex> vertices;
+        private final Set<Edge> edges;
 
         // note that rows must contain ALL UDTs for a given keyspace
-        UserTypeDependencyGraph(List<Row> rows, Metadata metadata) {
-            this.metadata = metadata;
-            graph = new DefaultDirectedGraph<Row, DefaultEdge>(DefaultEdge.class);
+        UserTypeDependencyGraph(List<Row> rows, Cluster cluster, KeyspaceMetadata keyspace) {
+            this.cluster = cluster;
+            this.keyspace = keyspace;
+            vertices = new ArrayList<Vertex>(rows.size());
+            edges = new HashSet<Edge>();
             for (Row row : rows) {
-                graph.addVertex(row);
+                vertices.add(new Vertex(row));
             }
-            for (Row row1 : rows) {
-                for (Row row2 : rows) {
-                    if (row1 != row2 && dependsOn(row1, row2))
-                        graph.addEdge(row2, row1);
+            for (Vertex from : vertices) {
+                for (Vertex to : vertices) {
+                    if (from != to && dependsOn(to.row, from.row))
+                        edges.add(new Edge(from, to));
                 }
             }
         }
 
-        TopologicalOrderIterator<Row, DefaultEdge> topologicalIterator() {
-            return new TopologicalOrderIterator<Row, DefaultEdge>(graph);
+        @Override
+        public Iterator<Row> iterator() {
+            for (Edge edge : edges) {
+                edge.to.refCount++;
+            }
+            Queue<Vertex> queue = new LinkedList<Vertex>();
+            for (Vertex vertex : vertices) {
+                if (vertex.refCount == 0)
+                    queue.add(vertex);
+            }
+            Row[] rows = new Row[vertices.size()];
+            int i = 0;
+            while (!queue.isEmpty()) {
+                Vertex v = queue.remove();
+                rows[i++] = v.row;
+                Set<Vertex> q = v.getSuccessors();
+                for (Vertex to : q) {
+                    if (--to.refCount == 0)
+                        queue.add(to);
+                }
+            }
+            return Iterators.forArray(rows);
         }
 
-        private boolean dependsOn(Row udt1, Row udt2) {
+        boolean dependsOn(Row udt1, Row udt2) {
             List<String> fieldTypes = udt1.getList(UserType.COLS_TYPES, String.class);
             String typeName = Metadata.escapeId(udt2.getString(UserType.TYPE_NAME));
             for (String fieldTypeStr : fieldTypes) {
-                // this will parse udts as custom types, which is what we want here
-                DataType fieldType = DataTypeParser.parse(fieldTypeStr, metadata, null, false);
+                // this will parse udts as unresolved types, which is what we want here
+                DataType fieldType = DataTypeParser.parse(fieldTypeStr, cluster, keyspace, null, false);
                 if (references(fieldType, typeName))
                     return true;
             }
             return false;
         }
 
-        private boolean references(DataType dataType, String typeName) {
-            if (dataType instanceof CustomType) {
-                String customName = ((CustomType)dataType).getCustomTypeClassName();
-                if (typeName.equals(customName))
+        boolean references(DataType dataType, String typeName) {
+            if (dataType instanceof UserType) {
+                assert dataType instanceof UnresolvedUserType;
+                if (typeName.equals(((UserType)dataType).getTypeName()))
                     return true;
             }
             for (DataType arg : dataType.getTypeArguments()) {
@@ -88,10 +109,37 @@ public class UserType extends DataType implements Iterable<UserType.Field> {
                         return true;
                 }
             }
-            // dataType cannot be UserType
             return false;
         }
 
+        class Vertex {
+
+            int refCount = 0;
+            Row row;
+
+            public Vertex(Row row) {
+                this.row = row;
+            }
+
+            public Set<Vertex> getSuccessors() {
+                Set<Vertex> successors = new HashSet<Vertex>();
+                for (Edge edge : edges) {
+                    if (edge.from == this)
+                        successors.add(edge.to);
+                }
+                return successors;
+            }
+        }
+
+        class Edge {
+            Vertex from;
+            Vertex to;
+
+            public Edge(Vertex from, Vertex to) {
+                this.from = from;
+                this.to = to;
+            }
+        }
     }
 
     private final String keyspace;

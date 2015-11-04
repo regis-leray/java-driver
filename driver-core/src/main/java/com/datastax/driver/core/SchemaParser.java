@@ -20,8 +20,6 @@ import java.util.concurrent.ExecutionException;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import org.jgrapht.graph.DefaultEdge;
-import org.jgrapht.traverse.TopologicalOrderIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -187,11 +185,9 @@ abstract class SchemaParser {
         Map<String, UserType> userTypes = new LinkedHashMap<String, UserType>();
         if (udtRows != null) {
             if(cassandraVersion.getMajor() >= 3 && udtRows.size() > 1) {
-                UserTypeDependencyGraph graph = new UserTypeDependencyGraph(udtRows, cluster.getMetadata());
-                TopologicalOrderIterator<Row, DefaultEdge> it = graph.topologicalIterator();
-                while (it.hasNext()) {
-                    Row udtRow = it.next();
-                    UserType type = UserType.build(udtRow, cassandraVersion, cluster, userTypes);
+                UserTypeDependencyGraph graph = new UserTypeDependencyGraph(udtRows, cluster, keyspace);
+                for (Row udtRow: graph) {
+                    UserType type = UserType.build(keyspace, udtRow, cassandraVersion, cluster, userTypes);
                     userTypes.put(type.getTypeName(), type);
                 }
             } else {
