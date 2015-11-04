@@ -201,7 +201,7 @@ public class TypeCodecTest {
 
     @Test(groups = "unit")
     public void should_deserialize_empty_buffer_as_tuple_with_null_values() {
-        CodecRegistry codecRegistry = CodecRegistry.DEFAULT_INSTANCE;
+        CodecRegistry codecRegistry = new CodecRegistry();
         TupleType tupleType = new TupleType(newArrayList(DataType.cint(), DataType.varchar(), DataType.cfloat()), ProtocolVersion.NEWEST_SUPPORTED, codecRegistry);
         TupleValue expected = tupleType.newValue(null, null, null);
 
@@ -212,7 +212,7 @@ public class TypeCodecTest {
 
     @Test(groups = "unit")
     public void should_deserialize_empty_buffer_as_udt_with_null_values() {
-        CodecRegistry codecRegistry = CodecRegistry.DEFAULT_INSTANCE;
+        CodecRegistry codecRegistry = new CodecRegistry();
         UserType udt = new UserType("ks", "t", Arrays.asList(
             new UserType.Field("t", DataType.text()),
             new UserType.Field("i", DataType.cint()),
