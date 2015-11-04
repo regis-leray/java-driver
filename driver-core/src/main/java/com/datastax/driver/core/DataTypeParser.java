@@ -20,8 +20,6 @@ import java.util.List;
 import java.util.Map;
 
 import com.google.common.collect.ImmutableMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.datastax.driver.core.exceptions.DriverInternalError;
 
@@ -39,8 +37,6 @@ import static com.datastax.driver.core.ParseUtils.skipSpaces;
  * so there shouldn't be anything wrong with them.
  */
 class DataTypeParser {
-
-    private static final Logger logger = LoggerFactory.getLogger(DataTypeParser.class);
 
     private static final String FROZEN = "frozen";
     private static final String LIST   = "list";
@@ -73,7 +69,7 @@ class DataTypeParser {
             .put("smallint",  smallint())
             .build();
 
-    static DataType parse(String toParse, Metadata metadata, Map<String, UserType> userTypes, boolean frozen) {
+    static DataType parse(String toParse, Cluster cluster, KeyspaceMetadata keyspace, Map<String, UserType> userTypes, boolean frozen) {
 
         Parser parser = new Parser(toParse, 0);
         String type = parser.parseTypeName();
@@ -86,7 +82,7 @@ class DataTypeParser {
             List<String> parameters = parser.parseTypeParameters();
             if (parameters.size() != 1)
                 throw new DriverInternalError(String.format("Excepting single parameter for list, got %s", parameters));
-            DataType elementType = parse(parameters.get(0), metadata, userTypes, false);
+            DataType elementType = parse(parameters.get(0), cluster, keyspace, userTypes, false);
             return list(elementType, frozen);
         }
 
@@ -94,7 +90,7 @@ class DataTypeParser {
             List<String> parameters = parser.parseTypeParameters();
             if (parameters.size() != 1)
                 throw new DriverInternalError(String.format("Excepting single parameter for set, got %s", parameters));
-            DataType elementType = parse(parameters.get(0), metadata, userTypes, false);
+            DataType elementType = parse(parameters.get(0), cluster, keyspace, userTypes, false);
             return set(elementType, frozen);
         }
 
@@ -102,8 +98,8 @@ class DataTypeParser {
             List<String> parameters = parser.parseTypeParameters();
             if (parameters.size() != 2)
                 throw new DriverInternalError(String.format("Excepting two parameters for map, got %s", parameters));
-            DataType keyType = parse(parameters.get(0), metadata, userTypes, false);
-            DataType valueType = parse(parameters.get(1), metadata, userTypes, false);
+            DataType keyType = parse(parameters.get(0), cluster, keyspace, userTypes, false);
+            DataType valueType = parse(parameters.get(1), cluster, keyspace, userTypes, false);
             return map(keyType, valueType, frozen);
         }
 
@@ -111,16 +107,16 @@ class DataTypeParser {
             List<String> parameters = parser.parseTypeParameters();
             if (parameters.size() != 1)
                 throw new DriverInternalError(String.format("Excepting single parameter for frozen keyword, got %s", parameters));
-            return parse(parameters.get(0), metadata, userTypes, true);
+            return parse(parameters.get(0), cluster, keyspace, userTypes, true);
         }
 
         if (type.equalsIgnoreCase(TUPLE)) {
             List<String> rawTypes = parser.parseTypeParameters();
             List<DataType> types = new ArrayList<DataType>(rawTypes.size());
             for (String rawType : rawTypes) {
-                types.add(parse(rawType, metadata, userTypes, false));
+                types.add(parse(rawType, cluster, keyspace, userTypes, false));
             }
-            return metadata.newTupleType(types);
+            return cluster.getMetadata().newTupleType(types);
         }
 
         // return a custom type for the special empty type
@@ -136,7 +132,7 @@ class DataTypeParser {
         }
 
         // should only happen when we race with the UDT creation
-        return custom(type);
+        return new UnresolvedUserType(keyspace, type, cluster);
 
     }
 

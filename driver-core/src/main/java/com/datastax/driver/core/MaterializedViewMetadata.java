@@ -103,7 +103,7 @@ public class MaterializedViewMetadata extends TableOrView {
         for (ColumnMetadata.Raw rawCol : rawCols.values()) {
             DataType dataType;
             if(cassandraVersion.getMajor() >= 3) {
-                dataType = DataTypeParser.parse(rawCol.dataType, cluster.getMetadata(), keyspace.userTypes, false);
+                dataType = DataTypeParser.parse(rawCol.dataType, cluster, keyspace, keyspace.userTypes, false);
             } else {
                 ProtocolVersion protocolVersion = cluster.getConfiguration().getProtocolOptions().getProtocolVersion();
                 CodecRegistry codecRegistry = cluster.getConfiguration().getCodecRegistry();

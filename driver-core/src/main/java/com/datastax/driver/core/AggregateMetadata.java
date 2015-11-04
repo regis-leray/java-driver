@@ -93,7 +93,7 @@ public class AggregateMetadata {
         String finalFuncSimpleName = row.getString("final_func");
         DataType returnType;
         if(version.getMajor() >= 3) {
-            returnType = DataTypeParser.parse(row.getString("return_type"), cluster.getMetadata(), ksm.userTypes, false);
+            returnType = DataTypeParser.parse(row.getString("return_type"), cluster, ksm, ksm.userTypes, false);
         } else {
             returnType = CassandraTypeParser.parseOne(row.getString("return_type"), protocolVersion, codecRegistry);
         }
@@ -102,7 +102,7 @@ public class AggregateMetadata {
         DataType stateType;
         Object initCond;
         if(version.getMajor() >= 3) {
-            stateType = DataTypeParser.parse(stateTypeName, cluster.getMetadata(), ksm.userTypes, false);
+            stateType = DataTypeParser.parse(stateTypeName, cluster, ksm, ksm.userTypes, false);
             ByteBuffer rawInitCond = row.getBytes("initcond");
             initCond = rawInitCond == null ? null : codecRegistry.codecFor(stateType).deserialize(rawInitCond, protocolVersion);
         } else {
@@ -136,7 +136,7 @@ public class AggregateMetadata {
         for (String name : types) {
             DataType type;
             if (version.getMajor() >= 3) {
-                type = DataTypeParser.parse(name, metadata, ksm.userTypes, false);
+                type = DataTypeParser.parse(name, cluster, ksm, ksm.userTypes, false);
             } else {
                 type = CassandraTypeParser.parseOne(name, protocolVersion, codecRegistry);
             }

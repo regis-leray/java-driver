@@ -86,7 +86,7 @@ abstract class SchemaParser {
                             break;
                         case TYPE:
                             if (rows.udts.containsKey(targetKeyspace)) {
-                                Map<String, UserType> userTypes = buildUserTypes(rows.udts.get(targetKeyspace), cassandraVersion, cluster);
+                                Map<String, UserType> userTypes = buildUserTypes(keyspace, rows.udts.get(targetKeyspace), cassandraVersion, cluster);
                                 updateUserTypes(metadata, keyspace.userTypes, userTypes, targetName);
                             }
                             break;
@@ -116,7 +116,7 @@ abstract class SchemaParser {
         Map<String, KeyspaceMetadata> keyspaces = new LinkedHashMap<String, KeyspaceMetadata>();
         for (Row keyspaceRow : rows.keyspaces) {
             KeyspaceMetadata keyspace = KeyspaceMetadata.build(keyspaceRow, cassandraVersion);
-            Map<String, UserType> userTypes = buildUserTypes(rows.udts.get(keyspace.getName()), cassandraVersion, cluster);
+            Map<String, UserType> userTypes = buildUserTypes(keyspace, rows.udts.get(keyspace.getName()), cassandraVersion, cluster);
             for (UserType userType : userTypes.values()) {
                 keyspace.add(userType);
             }
@@ -181,7 +181,7 @@ abstract class SchemaParser {
         return tables;
     }
 
-    private Map<String, UserType> buildUserTypes(List<Row> udtRows, VersionNumber cassandraVersion, Cluster cluster) {
+    private Map<String, UserType> buildUserTypes(KeyspaceMetadata keyspace, List<Row> udtRows, VersionNumber cassandraVersion, Cluster cluster) {
         Map<String, UserType> userTypes = new LinkedHashMap<String, UserType>();
         if (udtRows != null) {
             if(cassandraVersion.getMajor() >= 3 && udtRows.size() > 1) {
@@ -192,7 +192,7 @@ abstract class SchemaParser {
                 }
             } else {
                 for (Row udtRow : udtRows) {
-                    UserType type = UserType.build(udtRow, cassandraVersion, cluster, userTypes);
+                    UserType type = UserType.build(keyspace, udtRow, cassandraVersion, cluster, userTypes);
                     userTypes.put(type.getTypeName(), type);
                 }
             }
@@ -601,23 +601,23 @@ abstract class SchemaParser {
             ProtocolVersion protocolVersion = cluster.getConfiguration().getProtocolOptions().getProtocolVersion();
 
             if (isSchemaOrKeyspace)
-                ksFuture = queryAsync(SELECT_KEYSPACES + whereClause(targetType, targetKeyspace, targetName, targetSignature, cassandraVersion), connection, protocolVersion);
+                ksFuture = queryAsync(SELECT_KEYSPACES + whereClause(targetType, targetKeyspace, targetName, targetSignature), connection, protocolVersion);
 
             if (isSchemaOrKeyspace || targetType == TYPE)
-                udtFuture = queryAsync(SELECT_USERTYPES + whereClause(targetType, targetKeyspace, targetName, targetSignature, cassandraVersion), connection, protocolVersion);
+                udtFuture = queryAsync(SELECT_USERTYPES + whereClause(targetType, targetKeyspace, targetName, targetSignature), connection, protocolVersion);
 
             if (isSchemaOrKeyspace || targetType == TABLE) {
-                cfFuture = queryAsync(SELECT_TABLES + whereClause(targetType, targetKeyspace, targetName, targetSignature, cassandraVersion), connection, protocolVersion);
-                colsFuture = queryAsync(SELECT_COLUMNS + whereClause(targetType, targetKeyspace, targetName, targetSignature, cassandraVersion), connection, protocolVersion);
-                indexesFuture = queryAsync(SELECT_INDEXES + whereClause(targetType, targetKeyspace, targetName, targetSignature, cassandraVersion), connection, protocolVersion);
-                viewsFuture = queryAsync(SELECT_VIEWS + whereClause(targetType == TABLE ? VIEW : targetType, targetKeyspace, targetName, targetSignature, cassandraVersion), connection, protocolVersion);
+                cfFuture = queryAsync(SELECT_TABLES + whereClause(targetType, targetKeyspace, targetName, targetSignature), connection, protocolVersion);
+                colsFuture = queryAsync(SELECT_COLUMNS + whereClause(targetType, targetKeyspace, targetName, targetSignature), connection, protocolVersion);
+                indexesFuture = queryAsync(SELECT_INDEXES + whereClause(targetType, targetKeyspace, targetName, targetSignature), connection, protocolVersion);
+                viewsFuture = queryAsync(SELECT_VIEWS + whereClause(targetType == TABLE ? VIEW : targetType, targetKeyspace, targetName, targetSignature), connection, protocolVersion);
             }
 
             if (isSchemaOrKeyspace || targetType == FUNCTION)
-                functionsFuture = queryAsync(SELECT_FUNCTIONS + whereClause(targetType, targetKeyspace, targetName, targetSignature, cassandraVersion), connection, protocolVersion);
+                functionsFuture = queryAsync(SELECT_FUNCTIONS + whereClause(targetType, targetKeyspace, targetName, targetSignature), connection, protocolVersion);
 
             if (isSchemaOrKeyspace || targetType == AGGREGATE)
-                aggregatesFuture = queryAsync(SELECT_AGGREGATES + whereClause(targetType, targetKeyspace, targetName, targetSignature, cassandraVersion), connection, protocolVersion);
+                aggregatesFuture = queryAsync(SELECT_AGGREGATES + whereClause(targetType, targetKeyspace, targetName, targetSignature), connection, protocolVersion);
 
             return new SystemRows(get(ksFuture),
                 groupByKeyspace(get(cfFuture)),
@@ -634,7 +634,7 @@ abstract class SchemaParser {
             return TABLE_NAME;
         }
 
-        private String whereClause(SchemaElement targetType, String targetKeyspace, String targetName, List<String> targetSignature, VersionNumber cassandraVersion) {
+        private String whereClause(SchemaElement targetType, String targetKeyspace, String targetName, List<String> targetSignature) {
             String whereClause = "";
             if (targetType != null) {
                 whereClause = " WHERE keyspace_name = '" + targetKeyspace + '\'';
@@ -642,8 +642,7 @@ abstract class SchemaParser {
                     whereClause += " AND table_name = '" + targetName + '\'';
                 else if (targetType == VIEW)
                     whereClause += " AND view_name = '" + targetName + '\'';
-                else if (targetType == TYPE && cassandraVersion.getMajor() < 3)
-                    // C* 3+: we need all user types to be able to resolve nested UDTs
+                else if (targetType == TYPE)
                     whereClause += " AND type_name = '" + targetName + '\'';
                 else if (targetType == FUNCTION)
                     whereClause += " AND function_name = '" + targetName + "' AND argument_types = " + LIST_OF_TEXT_CODEC.format(targetSignature);

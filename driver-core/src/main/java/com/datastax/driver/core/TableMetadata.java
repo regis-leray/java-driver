@@ -185,7 +185,7 @@ public class TableMetadata extends TableOrView {
         for (ColumnMetadata.Raw rawCol : rawCols.values()) {
             DataType dataType;
             if(cassandraVersion.getMajor() >= 3) {
-                dataType = DataTypeParser.parse(rawCol.dataType, cluster.getMetadata(), ksm.userTypes, false);
+                dataType = DataTypeParser.parse(rawCol.dataType, cluster, ksm, ksm.userTypes, false);
             } else {
                 dataType = CassandraTypeParser.parseOne(rawCol.dataType, protocolVersion, codecRegistry);
             }

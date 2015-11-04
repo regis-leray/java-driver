@@ -151,11 +151,11 @@ public class UserType extends DataType implements Iterable<UserType.Field> {
     // Note that we don't expose the order of fields, from an API perspective this is a map
     // of String->Field, but internally we care about the order because the serialization format
     // of UDT expects a particular order.
-    final Field[] byIdx;
+    private final Field[] byIdx;
     // For a given name, we can only have one field with that name, so we don't need a int[] in
     // practice. However, storing one element arrays save allocations in UDTValue.getAllIndexesOf
     // implementation.
-    final Map<String, int[]> byName;
+    private final Map<String, int[]> byName;
 
     UserType(String keyspace, String typeName, Collection<Field> fields, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
         super(DataType.Name.UDT);
@@ -173,7 +173,7 @@ public class UserType extends DataType implements Iterable<UserType.Field> {
         this.byName = builder.build();
     }
 
-    static UserType build(Row row, VersionNumber version, Cluster cluster, Map<String, UserType> userTypes) {
+    static UserType build(KeyspaceMetadata ksm, Row row, VersionNumber version, Cluster cluster, Map<String, UserType> userTypes) {
         ProtocolVersion protocolVersion = cluster.getConfiguration().getProtocolOptions().getProtocolVersion();
         CodecRegistry codecRegistry = cluster.getConfiguration().getCodecRegistry();
 
@@ -187,7 +187,7 @@ public class UserType extends DataType implements Iterable<UserType.Field> {
         for (int i = 0; i < fieldNames.size(); i++) {
             DataType fieldType;
             if (version.getMajor() >= 3.0) {
-                fieldType = DataTypeParser.parse(fieldTypes.get(i), cluster.getMetadata(), userTypes, false);
+                fieldType = DataTypeParser.parse(fieldTypes.get(i), cluster, ksm, userTypes, false);
             } else {
                 fieldType = CassandraTypeParser.parseOne(fieldTypes.get(i), protocolVersion, codecRegistry);
             }
@@ -289,6 +289,14 @@ public class UserType extends DataType implements Iterable<UserType.Field> {
         return true;
     }
 
+    Field[] getFields() {
+        return byIdx;
+    }
+
+    Map<String, int[]> getFieldIndicesByName() {
+        return byName;
+    }
+
     @Override
     public int hashCode() {
         int result = name.hashCode();
@@ -299,7 +307,7 @@ public class UserType extends DataType implements Iterable<UserType.Field> {
     }
 
     @Override
-    public final boolean equals(Object o) {
+    public boolean equals(Object o) {
         if (!(o instanceof UserType))
             return false;
 
@@ -310,7 +318,7 @@ public class UserType extends DataType implements Iterable<UserType.Field> {
         return name.equals(other.name)
             && keyspace.equals(other.keyspace)
             && typeName.equals(other.typeName)
-            && Arrays.equals(byIdx, other.byIdx);
+            && Arrays.equals(getFields(), other.getFields());
     }
 
     /**

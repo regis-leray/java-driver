@@ -106,7 +106,7 @@ public class FunctionMetadata {
         String language = row.getString("language");
         DataType returnType;
         if(version.getMajor() >= 3.0) {
-            returnType = DataTypeParser.parse(row.getString("return_type"), cluster.getMetadata(), ksm.userTypes, false);
+            returnType = DataTypeParser.parse(row.getString("return_type"), cluster, ksm, ksm.userTypes, false);
         } else {
             returnType = CassandraTypeParser.parseOne(row.getString("return_type"), protocolVersion, codecRegistry);
         }
@@ -126,7 +126,7 @@ public class FunctionMetadata {
         for (String name : names) {
             DataType type;
             if (version.getMajor() >= 3) {
-                type = DataTypeParser.parse(iterTypes.next(), metadata, ksm.userTypes, false);
+                type = DataTypeParser.parse(iterTypes.next(), cluster, ksm, ksm.userTypes, false);
             } else {
                 type = CassandraTypeParser.parseOne(iterTypes.next(), protocolVersion, codecRegistry);
             }

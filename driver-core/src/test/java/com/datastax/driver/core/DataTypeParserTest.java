@@ -27,65 +27,65 @@ public class DataTypeParserTest extends CCMBridge.PerClassSingleNodeCluster {
 
     @Test(groups = "short")
     public void should_parse_native_types() {
-        assertThat(parse("ascii", cluster.getMetadata(), null, false)).isEqualTo(ascii());
-        assertThat(parse("bigint", cluster.getMetadata(), null, false)).isEqualTo(bigint());
-        assertThat(parse("blob", cluster.getMetadata(), null, false)).isEqualTo(blob());
-        assertThat(parse("boolean", cluster.getMetadata(), null, false)).isEqualTo(cboolean());
-        assertThat(parse("counter", cluster.getMetadata(), null, false)).isEqualTo(counter());
-        assertThat(parse("decimal", cluster.getMetadata(), null, false)).isEqualTo(decimal());
-        assertThat(parse("double", cluster.getMetadata(), null, false)).isEqualTo(cdouble());
-        assertThat(parse("float", cluster.getMetadata(), null, false)).isEqualTo(cfloat());
-        assertThat(parse("inet", cluster.getMetadata(), null, false)).isEqualTo(inet());
-        assertThat(parse("int", cluster.getMetadata(), null, false)).isEqualTo(cint());
-        assertThat(parse("text", cluster.getMetadata(), null, false)).isEqualTo(text());
-        assertThat(parse("varchar", cluster.getMetadata(), null, false)).isEqualTo(varchar());
-        assertThat(parse("timestamp", cluster.getMetadata(), null, false)).isEqualTo(timestamp());
-        assertThat(parse("date", cluster.getMetadata(), null, false)).isEqualTo(date());
-        assertThat(parse("time", cluster.getMetadata(), null, false)).isEqualTo(time());
-        assertThat(parse("uuid", cluster.getMetadata(), null, false)).isEqualTo(uuid());
-        assertThat(parse("varint", cluster.getMetadata(), null, false)).isEqualTo(varint());
-        assertThat(parse("timeuuid", cluster.getMetadata(), null, false)).isEqualTo(timeuuid());
-        assertThat(parse("tinyint", cluster.getMetadata(), null, false)).isEqualTo(tinyint());
-        assertThat(parse("smallint", cluster.getMetadata(), null, false)).isEqualTo(smallint());
+        assertThat(parse("ascii", cluster, null, null, false)).isEqualTo(ascii());
+        assertThat(parse("bigint", cluster, null, null, false)).isEqualTo(bigint());
+        assertThat(parse("blob", cluster, null, null, false)).isEqualTo(blob());
+        assertThat(parse("boolean", cluster, null, null, false)).isEqualTo(cboolean());
+        assertThat(parse("counter", cluster, null, null, false)).isEqualTo(counter());
+        assertThat(parse("decimal", cluster, null, null, false)).isEqualTo(decimal());
+        assertThat(parse("double", cluster, null, null, false)).isEqualTo(cdouble());
+        assertThat(parse("float", cluster, null, null, false)).isEqualTo(cfloat());
+        assertThat(parse("inet", cluster, null, null, false)).isEqualTo(inet());
+        assertThat(parse("int", cluster, null, null, false)).isEqualTo(cint());
+        assertThat(parse("text", cluster, null, null, false)).isEqualTo(text());
+        assertThat(parse("varchar", cluster, null, null, false)).isEqualTo(varchar());
+        assertThat(parse("timestamp", cluster, null, null, false)).isEqualTo(timestamp());
+        assertThat(parse("date", cluster, null, null, false)).isEqualTo(date());
+        assertThat(parse("time", cluster, null, null, false)).isEqualTo(time());
+        assertThat(parse("uuid", cluster, null, null, false)).isEqualTo(uuid());
+        assertThat(parse("varint", cluster, null, null, false)).isEqualTo(varint());
+        assertThat(parse("timeuuid", cluster, null, null, false)).isEqualTo(timeuuid());
+        assertThat(parse("tinyint", cluster, null, null, false)).isEqualTo(tinyint());
+        assertThat(parse("smallint", cluster, null, null, false)).isEqualTo(smallint());
     }
 
     @Test(groups = "short")
     public void should_ignore_whitespace() {
-        assertThat(parse("  int  ", cluster.getMetadata(), null, false)).isEqualTo(cint());
-        assertThat(parse("  set < bigint > ", cluster.getMetadata(), null, false)).isEqualTo(set(bigint()));
-        assertThat(parse("  map  <  date  ,  timeuuid  >  ", cluster.getMetadata(), null, false)).isEqualTo(map(date(), timeuuid()));
+        assertThat(parse("  int  ", cluster, null, null, false)).isEqualTo(cint());
+        assertThat(parse("  set < bigint > ", cluster, null, null, false)).isEqualTo(set(bigint()));
+        assertThat(parse("  map  <  date  ,  timeuuid  >  ", cluster, null, null, false)).isEqualTo(map(date(), timeuuid()));
     }
 
     @Test(groups = "short")
     public void should_ignore_case() {
-        assertThat(parse("INT", cluster.getMetadata(), null, false)).isEqualTo(cint());
-        assertThat(parse("SET<BIGint>", cluster.getMetadata(), null, false)).isEqualTo(set(bigint()));
-        assertThat(parse("FROZEN<mAp<Date,Tuple<timeUUID>>>", cluster.getMetadata(), null, false)).isEqualTo(map(date(), cluster.getMetadata().newTupleType(timeuuid()), true));
+        assertThat(parse("INT", cluster, null, null, false)).isEqualTo(cint());
+        assertThat(parse("SET<BIGint>", cluster, null, null, false)).isEqualTo(set(bigint()));
+        assertThat(parse("FROZEN<mAp<Date,Tuple<timeUUID>>>", cluster, null, null, false)).isEqualTo(map(date(), cluster.getMetadata().newTupleType(timeuuid()), true));
     }
 
     @Test(groups = "short")
     public void should_parse_collection_types() {
-        assertThat(parse("list<int>", cluster.getMetadata(), null, false)).isEqualTo(list(cint()));
-        assertThat(parse("set<bigint>", cluster.getMetadata(), null, false)).isEqualTo(set(bigint()));
-        assertThat(parse("map<date,timeuuid>", cluster.getMetadata(), null, false)).isEqualTo(map(date(), timeuuid()));
+        assertThat(parse("list<int>", cluster, null, null, false)).isEqualTo(list(cint()));
+        assertThat(parse("set<bigint>", cluster, null, null, false)).isEqualTo(set(bigint()));
+        assertThat(parse("map<date,timeuuid>", cluster, null, null, false)).isEqualTo(map(date(), timeuuid()));
     }
 
     @Test(groups = "short")
     public void should_parse_frozen_collection_types() {
-        assertThat(parse("frozen<list<int>>", cluster.getMetadata(), null, false)).isEqualTo(list(cint(), true));
-        assertThat(parse("frozen<set<bigint>>", cluster.getMetadata(), null, false)).isEqualTo(set(bigint(), true));
-        assertThat(parse("frozen<map<date,timeuuid>>", cluster.getMetadata(), null, false)).isEqualTo(map(date(), timeuuid(), true));
+        assertThat(parse("frozen<list<int>>", cluster, null, null, false)).isEqualTo(list(cint(), true));
+        assertThat(parse("frozen<set<bigint>>", cluster, null, null, false)).isEqualTo(set(bigint(), true));
+        assertThat(parse("frozen<map<date,timeuuid>>", cluster, null, null, false)).isEqualTo(map(date(), timeuuid(), true));
     }
 
     @Test(groups = "short")
     public void should_parse_nested_collection_types() {
-        assertThat(parse("list<list<int>>", cluster.getMetadata(), null, false)).isEqualTo(list(list(cint())));
-        assertThat(parse("set<list<frozen<map<bigint,varchar>>>>", cluster.getMetadata(), null, false)).isEqualTo(set(list(map(bigint(), varchar(), true))));
+        assertThat(parse("list<list<int>>", cluster, null, null, false)).isEqualTo(list(list(cint())));
+        assertThat(parse("set<list<frozen<map<bigint,varchar>>>>", cluster, null, null, false)).isEqualTo(set(list(map(bigint(), varchar(), true))));
     }
 
     @Test(groups = "short")
     public void should_parse_tuple_types() {
-        assertThat(parse("tuple<int,list<text>>", cluster.getMetadata(), null, false)).isEqualTo(cluster.getMetadata().newTupleType(cint(), list(text())));
+        assertThat(parse("tuple<int,list<text>>", cluster, null, null, false)).isEqualTo(cluster.getMetadata().newTupleType(cint(), list(text())));
     }
 
     @Test(groups = "short")
@@ -113,7 +113,7 @@ public class DataTypeParserTest extends CCMBridge.PerClassSingleNodeCluster {
         assertThat(a).hasField("f1", c);
         assertThat(b).hasField("f1", set(d));
         assertThat(c).hasField("f1", map(e, d));
-        assertThat(d).hasField("f1", cluster.getMetadata().newTupleType(f, g, h));
+        assertThat(d).hasField("f1", metadata.newTupleType(f, g, h));
         assertThat(e).hasField("f1", list(g));
         assertThat(f).hasField("f1", h);
         assertThat(g).hasField("f1", cint());
