@@ -78,23 +78,8 @@ public class UDTValue extends AbstractData<UDTValue> {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("{");
-        for (int i = 0; i < values.length; i++) {
-            if (i > 0)
-                sb.append(",");
-
-            sb.append(getName(i));
-            sb.append(":");
-
-            if(values[i] == null)
-                sb.append("null");
-            else {
-                DataType dt = getType(i);
-                TypeCodec<Object> codec = getCodecRegistry().codecFor(dt);
-                sb.append(codec.format(codec.deserialize(values[i], protocolVersion)));
-            }
-        }
-        sb.append("}");
+        TypeCodec<Object> codec = getCodecRegistry().codecFor(definition);
+        sb.append(codec.format(this));
         return sb.toString();
     }
 }

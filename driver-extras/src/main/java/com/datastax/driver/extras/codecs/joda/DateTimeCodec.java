@@ -30,7 +30,6 @@ import static org.joda.time.DateTimeZone.UTC;
 
 import com.datastax.driver.core.*;
 import com.datastax.driver.core.exceptions.InvalidTypeException;
-import com.datastax.driver.extras.codecs.AbstractTupleCodec;
 
 import static com.datastax.driver.core.ParseUtils.isLongLiteral;
 import static com.datastax.driver.core.ParseUtils.quote;
@@ -51,7 +50,7 @@ import static com.datastax.driver.core.ParseUtils.quote;
  * value is deserialized the timezone is
  * preserved.
  */
-public class DateTimeCodec extends AbstractTupleCodec<DateTime> {
+public class DateTimeCodec extends TypeCodec.AbstractTupleCodec<DateTime> {
 
     /**
      * A {@link DateTimeFormatter} that parses (most) of
@@ -75,6 +74,11 @@ public class DateTimeCodec extends AbstractTupleCodec<DateTime> {
             types.size() == 2 && types.get(0).equals(DataType.timestamp()) && types.get(1).equals(DataType.varchar()),
             "Expected tuple<timestamp,varchar>, got %s",
             tupleType);
+    }
+
+    @Override
+    protected DateTime newInstance() {
+        return null;
     }
 
     @Override

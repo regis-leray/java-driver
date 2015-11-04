@@ -18,8 +18,6 @@ package com.datastax.driver.extras.codecs.arrays;
 import java.lang.reflect.Array;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
 
 import com.datastax.driver.core.CodecUtils;
 import com.datastax.driver.core.DataType;
@@ -56,7 +54,8 @@ public class ObjectArrayCodec<E> extends AbstractArrayCodec<E[]> {
     public ByteBuffer serialize(E[] value, ProtocolVersion protocolVersion) {
         if (value == null)
             return null;
-        List<ByteBuffer> bbs = new ArrayList<ByteBuffer>(value.length);
+        int i = 0;
+        ByteBuffer[] bbs = new ByteBuffer[value.length];
         for (E elt : value) {
             if (elt == null) {
                 throw new NullPointerException("Collection elements cannot be null");
@@ -69,7 +68,7 @@ public class ObjectArrayCodec<E> extends AbstractArrayCodec<E[]> {
                     String.format("Invalid type for %s element, expecting %s but got %s",
                         cqlType, eltCodec.getJavaType(), elt.getClass()), e);
             }
-            bbs.add(bb);
+            bbs[i++] = bb;
         }
         return CodecUtils.pack(bbs, value.length, protocolVersion);
     }

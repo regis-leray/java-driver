@@ -75,7 +75,7 @@ public final class CodecUtils {
      * @param version the protocol version to use
      * @return The serialized collection
      */
-    public static ByteBuffer pack(List<ByteBuffer> buffers, int elements, ProtocolVersion version) {
+    public static ByteBuffer pack(ByteBuffer[] buffers, int elements, ProtocolVersion version) {
         int size = 0;
         for (ByteBuffer bb : buffers) {
             int elemSize = sizeOfValue(bb, version);

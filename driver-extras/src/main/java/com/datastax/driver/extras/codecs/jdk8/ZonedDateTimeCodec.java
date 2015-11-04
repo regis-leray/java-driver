@@ -23,9 +23,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
-import java.time.format.TextStyle;
 import java.util.List;
-import java.util.Locale;
 
 import static java.time.temporal.ChronoField.HOUR_OF_DAY;
 import static java.time.temporal.ChronoField.MINUTE_OF_HOUR;
@@ -36,7 +34,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 
 import com.datastax.driver.core.*;
 import com.datastax.driver.core.exceptions.InvalidTypeException;
-import com.datastax.driver.extras.codecs.AbstractTupleCodec;
 
 import static com.datastax.driver.core.ParseUtils.isLongLiteral;
 import static com.datastax.driver.core.ParseUtils.quote;
@@ -57,7 +54,7 @@ import static com.datastax.driver.core.ParseUtils.quote;
  * value is deserialized the timezone is
  * preserved.
  */
-public class ZonedDateTimeCodec extends AbstractTupleCodec<ZonedDateTime> {
+public class ZonedDateTimeCodec extends TypeCodec.AbstractTupleCodec<ZonedDateTime> {
 
     /**
      * A {@link DateTimeFormatter} that parses (most) of
@@ -95,6 +92,11 @@ public class ZonedDateTimeCodec extends AbstractTupleCodec<ZonedDateTime> {
             types.size() == 2 && types.get(0).equals(DataType.timestamp()) && types.get(1).equals(DataType.varchar()),
             "Expected tuple<timestamp,varchar>, got %s",
             tupleType);
+    }
+
+    @Override
+    protected ZonedDateTime newInstance() {
+        return null;
     }
 
     @Override

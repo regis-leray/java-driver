@@ -1655,16 +1655,16 @@ public abstract class TypeCodec<T> {
     }
 
     /**
-     * Base class for codecs handling CQL collection types such as {@link DataType#list(DataType)}
-     * or {@link DataType#set(DataType)}.
-     * Note that for practical reasons, {@link MapCodec} does not inherit from this class.
+     * Base class for codecs mapping CQL {@link DataType#list(DataType) lists}
+     * and {@link DataType#set(DataType) sets} to Java collections.
      */
-    private abstract static class CollectionCodec<E, C extends Collection<E>> extends TypeCodec<C> {
+    public abstract static class AbstractCollectionCodec<E, C extends Collection<E>> extends TypeCodec<C> {
 
         protected final TypeCodec<E> eltCodec;
 
-        private CollectionCodec(CollectionType cqlType, TypeToken<C> javaType, TypeCodec<E> eltCodec) {
+        public AbstractCollectionCodec(CollectionType cqlType, TypeToken<C> javaType, TypeCodec<E> eltCodec) {
             super(cqlType, javaType);
+            checkArgument(cqlType.getName() == Name.LIST || cqlType.getName() == Name.SET, "Expecting list or set type, got %s", cqlType);
             this.eltCodec = eltCodec;
         }
 
@@ -1672,7 +1672,8 @@ public abstract class TypeCodec<T> {
         public ByteBuffer serialize(C value, ProtocolVersion protocolVersion) {
             if (value == null)
                 return null;
-            List<ByteBuffer> bbs = new ArrayList<ByteBuffer>(value.size());
+            int i = 0;
+            ByteBuffer[] bbs = new ByteBuffer[value.size()];
             for (E elt : value) {
                 if (elt == null) {
                     throw new NullPointerException("Collection elements cannot be null");
@@ -1685,7 +1686,7 @@ public abstract class TypeCodec<T> {
                         String.format("Invalid type for %s element, expecting %s but got %s",
                             cqlType, eltCodec.getJavaType(), elt.getClass()), e);
                 }
-                bbs.add(bb);
+                bbs[i++] = bb;
             }
             return CodecUtils.pack(bbs, value.size(), protocolVersion);
         }
@@ -1696,15 +1697,15 @@ public abstract class TypeCodec<T> {
                 return newInstance(0);
             try {
                 ByteBuffer input = bytes.duplicate();
-                int n = CodecUtils.readSize(input, protocolVersion);
-                C coll = newInstance(n);
-                for (int i = 0; i < n; i++) {
+                int size = CodecUtils.readSize(input, protocolVersion);
+                C coll = newInstance(size);
+                for (int i = 0; i < size; i++) {
                     ByteBuffer databb = CodecUtils.readValue(input, protocolVersion);
                     coll.add(eltCodec.deserialize(databb, protocolVersion));
                 }
                 return coll;
             } catch (BufferUnderflowException e) {
-                throw new InvalidTypeException("Not enough bytes to deserialize list", e);
+                throw new InvalidTypeException("Not enough bytes to deserialize collection", e);
             }
         }
 
@@ -1731,7 +1732,7 @@ public abstract class TypeCodec<T> {
 
             int idx = ParseUtils.skipSpaces(value, 0);
             if (value.charAt(idx++) != getOpeningChar())
-                throw new InvalidTypeException(String.format("cannot parse list value from \"%s\", at character %d expecting '[' but got '%c'", value, idx, value.charAt(idx)));
+                throw new InvalidTypeException(String.format("cannot parse collection value from \"%s\", at character %d expecting '%s' but got '%c'", value, idx, getOpeningChar(), value.charAt(idx)));
 
             idx = ParseUtils.skipSpaces(value, idx);
 
@@ -1744,7 +1745,7 @@ public abstract class TypeCodec<T> {
                 try {
                     n = ParseUtils.skipCQLValue(value, idx);
                 } catch (IllegalArgumentException e) {
-                    throw new InvalidTypeException(String.format("Cannot parse list value from \"%s\", invalid CQL value at character %d", value, idx), e);
+                    throw new InvalidTypeException(String.format("Cannot parse collection value from \"%s\", invalid CQL value at character %d", value, idx), e);
                 }
 
                 l.add(eltCodec.parse(value.substring(idx, n)));
@@ -1754,31 +1755,51 @@ public abstract class TypeCodec<T> {
                 if (value.charAt(idx) == getClosingChar())
                     return l;
                 if (value.charAt(idx++) != ',')
-                    throw new InvalidTypeException(String.format("Cannot parse list value from \"%s\", at character %d expecting ',' but got '%c'", value, idx, value.charAt(idx)));
+                    throw new InvalidTypeException(String.format("Cannot parse collection value from \"%s\", at character %d expecting ',' but got '%c'", value, idx, value.charAt(idx)));
 
                 idx = ParseUtils.skipSpaces(value, idx);
             }
-            throw new InvalidTypeException(String.format("Malformed list value \"%s\", missing closing ']'", value));
+            throw new InvalidTypeException(String.format("Malformed collection value \"%s\", missing closing '%s'", value, getClosingChar()));
         }
 
         @Override
         public boolean accepts(Object value) {
             if (getJavaType().getRawType().isAssignableFrom(value.getClass())) {
                 // runtime type ok, now check element type
-                Collection<?> list = (Collection<?>)value;
-                if (list.isEmpty())
+                Collection<?> coll = (Collection<?>)value;
+                if (coll.isEmpty())
                     return true;
-                Object elt = list.iterator().next();
+                Object elt = coll.iterator().next();
                 return eltCodec.accepts(elt);
             }
             return false;
         }
 
-        protected abstract C newInstance(int capacity);
+        /**
+         * Return a new instance of {@code C} with the given estimated size.
+         *
+         * @param size The estimated size of the collection to create.
+         * @return new instance of {@code C} with the given estimated size.
+         */
+        protected abstract C newInstance(int size);
 
-        protected abstract char getOpeningChar();
+        /**
+         * Return the opening character to use when formatting values as CQL literals.
+         *
+         * @return The opening character to use when formatting values as CQL literals.
+         */
+        private char getOpeningChar() {
+            return cqlType.getName() == Name.LIST ? '[' : '{';
+        }
 
-        protected abstract char getClosingChar();
+        /**
+         * Return the closing character to use when formatting values as CQL literals.
+         *
+         * @return The closing character to use when formatting values as CQL literals.
+         */
+        private char getClosingChar() {
+            return cqlType.getName() == Name.LIST ? ']' : '}';
+        }
 
     }
 
@@ -1786,25 +1807,15 @@ public abstract class TypeCodec<T> {
      * This codec maps a CQL {@link DataType#list(DataType) list type} to a Java {@link List}.
      * Implementation note: this codec returns mutable, non thread-safe {@link ArrayList} instances.
      */
-    private static class ListCodec<T> extends CollectionCodec<T, List<T>> {
+    private static class ListCodec<T> extends AbstractCollectionCodec<T, List<T>> {
 
         private ListCodec(TypeCodec<T> eltCodec) {
             super(DataType.list(eltCodec.getCqlType()), listOf(eltCodec.getJavaType()), eltCodec);
         }
 
         @Override
-        protected List<T> newInstance(int capacity) {
-            return new ArrayList<T>(capacity);
-        }
-
-        @Override
-        protected char getOpeningChar() {
-            return '[';
-        }
-
-        @Override
-        protected char getClosingChar() {
-            return ']';
+        protected List<T> newInstance(int size) {
+            return new ArrayList<T>(size);
         }
 
     }
@@ -1813,39 +1824,29 @@ public abstract class TypeCodec<T> {
      * This codec maps a CQL {@link DataType#set(DataType) set type} to a Java {@link Set}.
      * Implementation note: this codec returns mutable, non thread-safe {@link LinkedHashSet} instances.
      */
-    private static class SetCodec<T> extends CollectionCodec<T, Set<T>> {
+    private static class SetCodec<T> extends AbstractCollectionCodec<T, Set<T>> {
 
         private SetCodec(TypeCodec<T> eltCodec) {
             super(DataType.set(eltCodec.cqlType), setOf(eltCodec.getJavaType()), eltCodec);
         }
 
         @Override
-        protected Set<T> newInstance(int capacity) {
-            return new LinkedHashSet<T>(capacity);
+        protected Set<T> newInstance(int size) {
+            return new LinkedHashSet<T>(size);
         }
 
-        @Override
-        protected char getOpeningChar() {
-            return '{';
-        }
-
-        @Override
-        protected char getClosingChar() {
-            return '}';
-        }
     }
 
     /**
-     * This codec maps a CQL {@link DataType#map(DataType, DataType) map type} to a Java {@link Map}.
-     * Implementation note: this codec returns mutable, non thread-safe {@link LinkedHashMap} instances.
+     * Base class for codec mapping CQL {@link DataType#map(DataType, DataType) maps} to a Java {@link Map}.
      */
-    private static class MapCodec<K, V> extends TypeCodec<Map<K, V>> {
+    public abstract static class AbstractMapCodec<K, V> extends TypeCodec<Map<K, V>> {
 
         private final TypeCodec<K> keyCodec;
 
         private final TypeCodec<V> valueCodec;
 
-        private MapCodec(TypeCodec<K> keyCodec, TypeCodec<V> valueCodec) {
+        public AbstractMapCodec(TypeCodec<K> keyCodec, TypeCodec<V> valueCodec) {
             super(DataType.map(keyCodec.getCqlType(), valueCodec.getCqlType()), mapOf(keyCodec.getJavaType(), valueCodec.getJavaType()));
             this.keyCodec = keyCodec;
             this.valueCodec = valueCodec;
@@ -1876,7 +1877,7 @@ public abstract class TypeCodec<T> {
             idx = ParseUtils.skipSpaces(value, idx);
 
             if (value.charAt(idx) == '}')
-                return new LinkedHashMap<K, V>(0);
+                return newInstance(0);
 
             Map<K, V> m = new HashMap<K, V>();
             while (idx < value.length()) {
@@ -1940,7 +1941,8 @@ public abstract class TypeCodec<T> {
         public ByteBuffer serialize(Map<K, V> value, ProtocolVersion protocolVersion) {
             if (value == null)
                 return null;
-            List<ByteBuffer> bbs = new ArrayList<ByteBuffer>(2 * value.size());
+            int i = 0;
+            ByteBuffer[] bbs = new ByteBuffer[2 * value.size()];
             for (Map.Entry<K, V> entry : value.entrySet()) {
                 ByteBuffer bbk;
                 K key = entry.getKey();
@@ -1950,7 +1952,7 @@ public abstract class TypeCodec<T> {
                 try {
                     bbk = keyCodec.serialize(key, protocolVersion);
                 } catch (ClassCastException e) {
-                    throw new InvalidTypeException(String.format("Invalid type for map key, expecting % but got %s", keyCodec.getJavaType(), key.getClass()), e);
+                    throw new InvalidTypeException(String.format("Invalid type for map key, expecting %s but got %s", keyCodec.getJavaType(), key.getClass()), e);
                 }
                 ByteBuffer bbv;
                 V v = entry.getValue();
@@ -1960,10 +1962,10 @@ public abstract class TypeCodec<T> {
                 try {
                     bbv = valueCodec.serialize(v, protocolVersion);
                 } catch (ClassCastException e) {
-                    throw new InvalidTypeException(String.format("Invalid type for map value, expecting % but got %s", valueCodec.getJavaType(), v.getClass()), e);
+                    throw new InvalidTypeException(String.format("Invalid type for map value, expecting %s but got %s", valueCodec.getJavaType(), v.getClass()), e);
                 }
-                bbs.add(bbk);
-                bbs.add(bbv);
+                bbs[i++] = bbk;
+                bbs[i++] = bbv;
             }
             return CodecUtils.pack(bbs, value.size(), protocolVersion);
         }
@@ -1971,11 +1973,11 @@ public abstract class TypeCodec<T> {
         @Override
         public Map<K, V> deserialize(ByteBuffer bytes, ProtocolVersion protocolVersion) {
             if (bytes == null || bytes.remaining() == 0)
-                return new LinkedHashMap<K, V>(0);
+                return newInstance(0);
             try {
                 ByteBuffer input = bytes.duplicate();
                 int n = CodecUtils.readSize(input, protocolVersion);
-                Map<K, V> m = new LinkedHashMap<K, V>(n);
+                Map<K, V> m = newInstance(n);
                 for (int i = 0; i < n; i++) {
                     ByteBuffer kbb = CodecUtils.readValue(input, protocolVersion);
                     ByteBuffer vbb = CodecUtils.readValue(input, protocolVersion);
@@ -1986,31 +1988,117 @@ public abstract class TypeCodec<T> {
                 throw new InvalidTypeException("Not enough bytes to deserialize a map", e);
             }
         }
+
+        /**
+         * Return a new {@link Map} instance with the given estimated size.
+         *
+         * @param size The estimated size of the collection to create.
+         * @return A new {@link Map} instance with the given estimated size.
+         */
+        protected abstract Map<K, V> newInstance(int size);
+
     }
 
     /**
-     * This codec maps a CQL {@link UserType} to a {@link UDTValue}.
+     * This codec maps a CQL {@link DataType#map(DataType, DataType) map type} to a Java {@link Map}.
+     * Implementation note: this codec returns mutable, non thread-safe {@link LinkedHashMap} instances.
      */
-    private static class UDTCodec extends TypeCodec<UDTValue> {
+    private static class MapCodec<K, V> extends AbstractMapCodec<K, V> {
 
-        private final UserType definition;
+        private MapCodec(TypeCodec<K> keyCodec, TypeCodec<V> valueCodec) {
+            super(keyCodec, valueCodec);
+        }
 
-        private UDTCodec(UserType definition) {
-            super(definition, UDTValue.class);
+        @Override
+        protected Map<K, V> newInstance(int size) {
+            return new LinkedHashMap<K, V>(size);
+        }
+
+    }
+
+    /**
+     * This codec maps a CQL {@link UserType user-defined type} (UDT) to a Java object.
+     * It can serve as a base class for codecs dealing with
+     * direct UDT-to-Pojo mappings.
+     *
+     * @param <T> The Java type that this codec handles.
+     */
+    public abstract static class AbstractUDTCodec<T> extends TypeCodec<T> {
+
+        protected final UserType definition;
+
+        public AbstractUDTCodec(UserType definition, Class<T> javaClass) {
+            super(definition, javaClass);
+            this.definition = definition;
+        }
+
+        public AbstractUDTCodec(UserType definition, TypeToken<T> javaType) {
+            super(definition, javaType);
             this.definition = definition;
         }
 
         @Override
-        public boolean accepts(Object value) {
-            return value instanceof UDTValue && ((UDTValue)value).getType().equals(definition);
+        public ByteBuffer serialize(T value, ProtocolVersion protocolVersion) {
+            if (value == null)
+                return null;
+            int size = 0;
+            int length = definition.size();
+            ByteBuffer[] elements = new ByteBuffer[length];
+            for (int i = 0; i < length; i++) {
+                elements[i] = serializeElement(value, i, protocolVersion);
+                size += 4 + (elements[i] == null ? 0 : elements[i].remaining());
+            }
+            ByteBuffer result = ByteBuffer.allocate(size);
+            for (ByteBuffer bb : elements) {
+                if (bb == null) {
+                    result.putInt(-1);
+                } else {
+                    result.putInt(bb.remaining());
+                    result.put(bb.duplicate());
+                }
+            }
+            return (ByteBuffer)result.flip();
         }
 
         @Override
-        public UDTValue parse(String value) {
+        public T deserialize(ByteBuffer bytes, ProtocolVersion protocolVersion) {
+            if (bytes == null)
+                return null;
+            // empty byte buffers will result in empty TupleValues
+            ByteBuffer input = bytes.duplicate();
+            T value = newInstance();
+            int i = 0;
+            while (input.hasRemaining() && i < definition.size()) {
+                int n = input.getInt();
+                ByteBuffer element = n < 0 ? null : CodecUtils.readBytes(input, n);
+                value = deserializeElement(element, value, i++, protocolVersion);
+            }
+            return value;
+        }
+
+        @Override
+        public String format(T value) {
+            if (value == null)
+                return "NULL";
+            StringBuilder sb = new StringBuilder("{");
+            for (int i = 0; i < definition.size(); i++) {
+                if (i > 0)
+                    sb.append(",");
+                String name = definition.byIdx[i].getName();
+                sb.append(name);
+                sb.append(":");
+                formatElement(sb, value, name);
+            }
+            sb.append("}");
+            return sb.toString();
+        }
+
+        @Override
+        public T parse(String value) {
             if (value == null || value.isEmpty() || value.equals("NULL"))
                 return null;
 
-            UDTValue v = definition.newValue();
+            T v = newInstance();
 
             int idx = ParseUtils.skipSpaces(value, 0);
             if (value.charAt(idx++) != '{')
@@ -2046,9 +2134,8 @@ public abstract class TypeCodec<T> {
                     throw new InvalidTypeException(String.format("Cannot parse UDT value from \"%s\", invalid CQL value at character %d", value, idx), e);
                 }
 
-                DataType dt = definition.getFieldType(name);
-                TypeCodec<Object> codec = definition.getCodecRegistry().codecFor(dt);
-                v.set(name, codec.parse(value.substring(idx, n)), codec.getJavaType());
+                String input = value.substring(idx, n);
+                v = parseElement(input, v, name);
                 idx = n;
 
                 idx = ParseUtils.skipSpaces(value, idx);
@@ -2063,23 +2150,140 @@ public abstract class TypeCodec<T> {
             throw new InvalidTypeException(String.format("Malformed UDT value \"%s\", missing closing '}'", value));
         }
 
-        @Override
-        public String format(UDTValue value) {
-            if (value == null)
-                return "NULL";
-            return value.toString();
+        /**
+         * Return a new instance of {@code T}.
+         *
+         * @return A new instance of {@code T}.
+         */
+        protected abstract T newInstance();
+
+        /**
+         * Serialize the {@code index}th element of {@code value}.
+         * 
+         * @param value The value to read from.
+         * @param index The element index.
+         * @param protocolVersion The protocol version to use.
+         * @return The serialized element.
+         */
+        protected abstract ByteBuffer serializeElement(T value, int index, ProtocolVersion protocolVersion);
+
+        /**
+         * Read and set the {@code index}th element of {@code value} from {@code input}.
+         * 
+         * @param input The ByteBuffer to read from.
+         * @param value The value to write to.
+         * @param index The element index.
+         * @param protocolVersion The protocol version to use.
+         * @return The value.
+         */
+        protected abstract T deserializeElement(ByteBuffer input, T value, int index, ProtocolVersion protocolVersion);
+
+        /**
+         * Format the field with name {@code name} in {@code value} to {@code output}.
+         *
+         * @param output The StringBuilder to write to.
+         * @param value The value to read from.
+         * @param name The element name.
+         */
+        protected abstract void formatElement(StringBuilder output, T value, String name);
+
+        /**
+         * Parse {@code input} and set the parsed value to field {@code name} in {@code value}.
+         *
+         * @param input The String to read from.
+         * @param value The value to write to.
+         * @param name The element name.
+         * @return The value.
+         */
+        protected abstract T parseElement(String input, T value, String name);
+    }
+
+    /**
+     * This codec maps a CQL {@link UserType} to a {@link UDTValue}.
+     */
+    private static class UDTCodec extends AbstractUDTCodec<UDTValue> {
+
+        private UDTCodec(UserType definition) {
+            super(definition, UDTValue.class);
         }
 
         @Override
-        public ByteBuffer serialize(UDTValue value, ProtocolVersion protocolVersion) {
+        public boolean accepts(Object value) {
+            return super.accepts(value) && ((UDTValue)value).getType().equals(definition);
+        }
+
+        @Override
+        protected UDTValue newInstance() {
+            return definition.newValue();
+        }
+
+        @Override
+        protected ByteBuffer serializeElement(UDTValue value, int index, ProtocolVersion protocolVersion) {
+            return value.getBytesUnsafe(index);
+        }
+
+        @Override
+        protected UDTValue deserializeElement(ByteBuffer input, UDTValue value, int index, ProtocolVersion protocolVersion) {
+            return value.setBytesUnsafe(index, input);
+        }
+
+        @Override
+        protected void formatElement(StringBuilder output, UDTValue value, String name) {
+            DataType elementType = definition.getFieldType(name);
+            TypeCodec<Object> codec = definition.getCodecRegistry().codecFor(elementType);
+            output.append(codec.format(value.get(name, codec.getJavaType())));
+        }
+
+        @Override
+        protected UDTValue parseElement(String input, UDTValue value, String name) {
+            DataType elementType = definition.getFieldType(name);
+            TypeCodec<Object> codec = definition.getCodecRegistry().codecFor(elementType);
+            value.set(name, codec.parse(input), codec.getJavaType());
+            return value;
+        }
+    }
+
+    /**
+     * This codec maps a CQL {@link TupleType tuple} to a a Java object.
+     * It can serve as a base class for codecs dealing with
+     * direct tuple-to-Pojo mappings.
+
+     * @param <T> The Java type that this codec handles.
+     */
+    public abstract static class AbstractTupleCodec<T> extends TypeCodec<T> {
+
+        protected final TupleType definition;
+
+        public AbstractTupleCodec(TupleType definition, Class<T> javaClass) {
+            super(definition, javaClass);
+            this.definition = definition;
+        }
+
+        public AbstractTupleCodec(TupleType definition, TypeToken<T> javaType) {
+            super(definition, javaType);
+            this.definition = definition;
+        }
+
+        @Override
+        public boolean accepts(DataType cqlType) {
+            // a tuple codec should accept tuple values of a different type,
+            // provided that the latter is contained in this codec's type.
+            return super.accepts(cqlType) && definition.contains((TupleType)cqlType);
+        }
+
+        @Override
+        public ByteBuffer serialize(T value, ProtocolVersion protocolVersion) {
             if (value == null)
                 return null;
             int size = 0;
-            for (ByteBuffer v : value.values)
-                size += 4 + (v == null ? 0 : v.remaining());
-
+            int length = definition.getComponentTypes().size();
+            ByteBuffer[] elements = new ByteBuffer[length];
+            for (int i = 0; i < length; i++) {
+                elements[i] = serializeElement(value, i, protocolVersion);
+                size += 4 + (elements[i] == null ? 0 : elements[i].remaining());
+            }
             ByteBuffer result = ByteBuffer.allocate(size);
-            for (ByteBuffer bb : value.values) {
+            for (ByteBuffer bb : elements) {
                 if (bb == null) {
                     result.putInt(-1);
                 } else {
@@ -2091,54 +2295,42 @@ public abstract class TypeCodec<T> {
         }
 
         @Override
-        public UDTValue deserialize(ByteBuffer bytes, ProtocolVersion protocolVersion) {
+        public T deserialize(ByteBuffer bytes, ProtocolVersion protocolVersion) {
             if (bytes == null)
                 return null;
-            // empty byte buffers will result in empty UDTValues
+            // empty byte buffers will result in empty TupleValues
             ByteBuffer input = bytes.duplicate();
-            UDTValue value = definition.newValue();
-
+            T value = newInstance();
             int i = 0;
-            while (input.hasRemaining() && i < value.values.length) {
+            while (input.hasRemaining() && i < definition.getComponentTypes().size()) {
                 int n = input.getInt();
-                value.values[i++] = n < 0 ? null : CodecUtils.readBytes(input, n);
+                ByteBuffer element = n < 0 ? null : CodecUtils.readBytes(input, n);
+                value = deserializeElement(element, value, i++, protocolVersion);
             }
             return value;
         }
-    }
 
-    /**
-     * This codec maps a CQL {@link TupleType} to a {@link TupleValue}.
-     */
-    private static class TupleCodec extends TypeCodec<TupleValue> {
-
-        private final TupleType definition;
-
-        private TupleCodec(TupleType definition) {
-            super(definition, TupleValue.class);
-            this.definition = definition;
+        @Override
+        public String format(T value) {
+            if (value == null)
+                return "NULL";
+            StringBuilder sb = new StringBuilder("(");
+            int length = definition.getComponentTypes().size();
+            for (int i = 0; i < length; i++) {
+                if (i > 0)
+                    sb.append(",");
+                formatElement(sb, value, i);
+            }
+            sb.append(")");
+            return sb.toString();
         }
 
         @Override
-        public boolean accepts(DataType cqlType) {
-            // a tuple codec should accept tuple values of a different type,
-            // provided that the latter is contained in this codec's type.
-            return cqlType instanceof TupleType && definition.contains((TupleType)cqlType);
-        }
-
-        @Override
-        public boolean accepts(Object value) {
-            // a tuple codec should accept tuple values of a different type,
-            // provided that the latter is contained in this codec's type.
-            return value instanceof TupleValue && definition.contains(((TupleValue)value).getType());
-        }
-
-        @Override
-        public TupleValue parse(String value) {
-            if (value == null || value.isEmpty() || value.equals("NULL"))
+        public T parse(String value) {
+            if (value == null || value.isEmpty() || value.equalsIgnoreCase("NULL"))
                 return null;
 
-            TupleValue v = definition.newValue();
+            T v = newInstance();
 
             int idx = ParseUtils.skipSpaces(value, 0);
             if (value.charAt(idx++) != '(')
@@ -2158,9 +2350,8 @@ public abstract class TypeCodec<T> {
                     throw new InvalidTypeException(String.format("Cannot parse tuple value from \"%s\", invalid CQL value at character %d", value, idx), e);
                 }
 
-                DataType dt = definition.getComponentTypes().get(i);
-                TypeCodec<Object> codec = definition.getCodecRegistry().codecFor(dt);
-                v.set(i, codec.parse(value.substring(idx, n)), codec.getJavaType());
+                String input = value.substring(idx, n);
+                v = parseElement(input, v, i);
                 idx = n;
                 i += 1;
 
@@ -2176,48 +2367,105 @@ public abstract class TypeCodec<T> {
             throw new InvalidTypeException(String.format("Malformed tuple value \"%s\", missing closing ')'", value));
         }
 
-        @Override
-        public String format(TupleValue value) {
-            if (value == null)
-                return "NULL";
-            return value.toString();
+        /**
+         * Return a new instance of {@code T}.
+         *
+         * @return A new instance of {@code T}.
+         */
+        protected abstract T newInstance();
+
+        /**
+         * Serialize the {@code index}th element of {@code value}.
+         * 
+         * @param value The value to read from.
+         * @param index The element index.
+         * @param protocolVersion The protocol version to use.
+         * @return The serialized element.
+         */
+        protected abstract ByteBuffer serializeElement(T value, int index, ProtocolVersion protocolVersion);
+
+        /**
+         * Read and set the {@code index}th element of {@code value} from {@code input}.
+         * 
+         * @param input The ByteBuffer to read from.
+         * @param value The value to write to.
+         * @param index The element index.
+         * @param protocolVersion The protocol version to use.
+         * @return The value.
+         */
+        protected abstract T deserializeElement(ByteBuffer input, T value, int index, ProtocolVersion protocolVersion);
+
+        /**
+         * Format the {@code index}th element of {@code value} to {@code output}.
+         *
+         * @param output The StringBuilder to write to.
+         * @param value The value to read from.
+         * @param index The element index.
+         */
+        protected abstract void formatElement(StringBuilder output, T value, int index);
+
+        /**
+         * Parse and set the {@code index}th element of {@code value} from {@code input}.
+         *
+         * @param input The String to read from.
+         * @param value The value to write to.
+         * @param index The element index.
+         * @return The value.
+         */
+        protected abstract T parseElement(String input, T value, int index);
+
+    }
+
+    /**
+     * This codec maps a CQL {@link TupleType tuple} to a {@link TupleValue}.
+     */
+    private static class TupleCodec extends AbstractTupleCodec<TupleValue> {
+
+        private TupleCodec(TupleType definition) {
+            super(definition, TupleValue.class);
         }
 
         @Override
-        public ByteBuffer serialize(TupleValue value, ProtocolVersion protocolVersion) {
-            if (value == null)
-                return null;
-            int size = 0;
-            for (ByteBuffer v : value.values)
-                size += 4 + (v == null ? 0 : v.remaining());
-
-            ByteBuffer result = ByteBuffer.allocate(size);
-            for (ByteBuffer bb : value.values) {
-                if (bb == null) {
-                    result.putInt(-1);
-                } else {
-                    result.putInt(bb.remaining());
-                    result.put(bb.duplicate());
-                }
-            }
-            return (ByteBuffer)result.flip();
+        public boolean accepts(Object value) {
+            // a tuple codec should accept tuple values of a different type,
+            // provided that the latter is contained in this codec's type.
+            return super.accepts(value) && definition.contains(((TupleValue)value).getType());
         }
 
         @Override
-        public TupleValue deserialize(ByteBuffer bytes, ProtocolVersion protocolVersion) {
-            if (bytes == null)
-                return null;
-            // empty byte buffers will result in empty TupleValues
-            ByteBuffer input = bytes.duplicate();
-            TupleValue value = definition.newValue();
+        protected TupleValue newInstance() {
+            return definition.newValue();
+        }
 
-            int i = 0;
-            while (input.hasRemaining() && i < value.values.length) {
-                int n = input.getInt();
-                value.values[i++] = n < 0 ? null : CodecUtils.readBytes(input, n);
-            }
+        @Override
+        protected ByteBuffer serializeElement(TupleValue value, int index, ProtocolVersion protocolVersion) {
+            if (index >= value.values.length)
+                return null;
+            return value.getBytesUnsafe(index);
+        }
+
+        @Override
+        protected TupleValue deserializeElement(ByteBuffer input, TupleValue value, int index, ProtocolVersion protocolVersion) {
+            if (index >= value.values.length)
+                return value;
+            return value.setBytesUnsafe(index, input);
+        }
+
+        @Override
+        protected void formatElement(StringBuilder output, TupleValue value, int index) {
+            DataType elementType = definition.getComponentTypes().get(index);
+            TypeCodec<Object> codec = definition.getCodecRegistry().codecFor(elementType);
+            output.append(codec.format(value.get(index, codec.getJavaType())));
+        }
+
+        @Override
+        protected TupleValue parseElement(String input, TupleValue value, int index) {
+            DataType elementType = definition.getComponentTypes().get(index);
+            TypeCodec<Object> codec = definition.getCodecRegistry().codecFor(elementType);
+            value.set(index, codec.parse(input), codec.getJavaType());
             return value;
         }
+
     }
 
 }

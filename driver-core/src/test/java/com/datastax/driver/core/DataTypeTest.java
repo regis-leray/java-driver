@@ -249,7 +249,7 @@ public class DataTypeTest {
     @Test(groups = "unit")
     public void parseFormatTupleTest() {
 
-        String toParse = "(1, 'foo', 1.0)";
+        String toParse = "(1,'foo',1.0)";
         TupleType t = new TupleType(newArrayList(DataType.cint(), DataType.text(), DataType.cfloat()), protocolVersion, codecRegistry);
         TupleValue toFormat = t.newValue(1, "foo", 1.0f);
 
