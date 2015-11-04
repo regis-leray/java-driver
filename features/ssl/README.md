@@ -1,27 +1,37 @@
 ## SSL
 
-You can secure traffic between the driver and Cassandra with SSL. This
-section describes the driver-side configuration; it assumes that you've
-already
-[configured SSL in Cassandra](http://docs.datastax.com/en/cassandra/2.0/cassandra/security/secureSSLClientToNode_t.html).
+You can secure traffic between the driver and Cassandra with SSL. There
+are two aspects to that:
+
+* **client-to-node encryption**, where the traffic is encrypted, and the
+  client verifies the identity of the Cassandra nodes it connects to;
+* optionally, **client certificate authentication**, where Cassandra
+  nodes also verify the identity of the client.
+
+This section describes the driver-side configuration; it assumes that
+you've already configured SSL in Cassandra:
+
+* [the Cassandra documentation](http://docs.datastax.com/en/cassandra/2.0/cassandra/security/secureSSLClientToNode_t.html)
+  covers a basic approach with self-signed certificates, which is fine
+  for development and tests.
+* [this blog post](http://thelastpickle.com/blog/2015/09/30/hardening-cassandra-step-by-step-part-1-server-to-server.html)
+  details a more advanced solution based on a Certificate Authority
+  (CA).
 
 ### Preparing the certificates
 
 #### Client truststore
 
-This allows the client to verify the identity of all the Cassandra nodes
-it connects to.
+This is required for client-to-node encryption.
 
-As part of configuring Cassandra, you should already have
-[prepared a certificate](http://docs.datastax.com/en/cassandra/2.0/cassandra/security/secureSSLCertificates_t.html)
-for each node. Export the public part of that certificate from the
-node's keystore:
+If you're using self-signed certificates, you need to export the public
+part of each node's certificate from that node's keystore:
 
 ```
 keytool -export -alias cassandra -file cassandranode0.cer -keystore .keystore
 ```
 
-Add the public certificates to the client trustore:
+Then add all public certificates to the client truststore:
 
 ```
 keytool -import -v -trustcacerts -alias <cassandra_node0> -file cassandranode0.cer -keystore client.truststore
@@ -29,7 +39,12 @@ keytool -import -v -trustcacerts -alias <cassandra_node1> -file cassandranode1.c
 ...
 ```
 
-Distribute `client.truststore` to the client(s).
+If you're using a Certificate Authority, the client truststore only
+needs to contain the CA's certificate:
+
+```
+keytool -import -v -trustcacerts -alias CARoot -file ca.cer -keystore client.truststore
+```
 
 #### Client keystore
 
@@ -40,13 +55,19 @@ the public and private key pair for the client:
 keytool -genkey -keyalg RSA -alias client -keystore client.keystore
 ```
 
-Then extract the public part of the client certificate, and import it in
-the truststore of each Cassandra node:
+If you're using self-signed certificates, extract the public part of the
+client certificate, and import it in the truststore of each Cassandra
+node:
 
 ```
 keytool -export -alias client -file client.cer -keystore client.keystore
 keytool -import -v -trustcacerts -alias client -file client.cer -keystore server.truststore
 ```
+
+If you're using a CA, sign the client certificate with it (see the blog
+post linked at the top of this page). Then the nodes' truststores only
+need to contain the CA's certificate (which should already be the case
+if you've followed the steps for inter-node encryption).
 
 ### Driver configuration
 
@@ -66,10 +87,11 @@ You can then use
 for specific details, like keystore locations and passwords:
 
 ```
--Djavax.net.ssl.keyStore=/path/to/client.keystore
--Djavax.net.ssl.keyStorePassword=password123
 -Djavax.net.ssl.trustStore=/path/to/client.truststore
 -Djavax.net.ssl.trustStorePassword=password123
+# If you're using client authentication:
+-Djavax.net.ssl.keyStore=/path/to/client.keystore
+-Djavax.net.ssl.keyStorePassword=password123
 ```
 
 #### Programmatic
