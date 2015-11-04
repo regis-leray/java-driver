@@ -37,28 +37,86 @@ public final class CodecUtils {
 
     private CodecUtils(){}
 
+    /**
+     * Create a {@link TypeToken} that represents a {@link List} whose elements
+     * are of the given type.
+     *
+     * @param eltType The list element type.
+     * @param <T> The list element type.
+     * @return A {@link TypeToken} that represents a {@link List} whose elements
+     * are of the given type.
+     */
     public static <T> TypeToken<List<T>> listOf(Class<T> eltType) {
         return new TypeToken<List<T>>(){}.where(new TypeParameter<T>(){}, eltType);
     }
 
+    /**
+     * Create a {@link TypeToken} that represents a {@link List} whose elements
+     * are of the given type.
+     *
+     * @param eltType The list element type.
+     * @param <T> The list element type.
+     * @return A {@link TypeToken} that represents a {@link List} whose elements
+     * are of the given type.
+     */
     public static <T> TypeToken<List<T>> listOf(TypeToken<T> eltType) {
         return new TypeToken<List<T>>(){}.where(new TypeParameter<T>(){}, eltType);
     }
 
+    /**
+     * Create a {@link TypeToken} that represents a {@link Set} whose elements
+     * are of the given type.
+     *
+     * @param eltType The set element type.
+     * @param <T> The set element type.
+     * @return A {@link TypeToken} that represents a {@link Set} whose elements
+     * are of the given type.
+     */
     public static <T> TypeToken<Set<T>> setOf(Class<T> eltType) {
         return new TypeToken<Set<T>>(){}.where(new TypeParameter<T>(){}, eltType);
     }
 
+    /**
+     * Create a {@link TypeToken} that represents a {@link Set} whose elements
+     * are of the given type.
+     *
+     * @param eltType The set element type.
+     * @param <T> The set element type.
+     * @return A {@link TypeToken} that represents a {@link Set} whose elements
+     * are of the given type.
+     */
     public static <T> TypeToken<Set<T>> setOf(TypeToken<T> eltType) {
         return new TypeToken<Set<T>>(){}.where(new TypeParameter<T>(){}, eltType);
     }
 
+    /**
+     * Create a {@link TypeToken} that represents a {@link Map} whose keys
+     * and values are of the given key and value types.
+     *
+     * @param keyType The map key type.
+     * @param valueType The map value type
+     * @param <K> The map key type.
+     * @param <V> The map value type
+     * @return A {@link TypeToken} that represents a {@link Map} whose keys
+     * and values are of the given key and value types
+     */
     public static <K, V> TypeToken<Map<K, V>> mapOf(Class<K> keyType, Class<V> valueType) {
         return new TypeToken<Map<K, V>>(){}
             .where(new TypeParameter<K>(){}, keyType)
             .where(new TypeParameter<V>(){}, valueType);
     }
 
+    /**
+     * Create a {@link TypeToken} that represents a {@link Map} whose keys
+     * and values are of the given key and value types.
+     *
+     * @param keyType The map key type.
+     * @param valueType The map value type
+     * @param <K> The map key type.
+     * @param <V> The map value type
+     * @return A {@link TypeToken} that represents a {@link Map} whose keys
+     * and values are of the given key and value types
+     */
     public static <K, V> TypeToken<Map<K, V>> mapOf(TypeToken<K> keyType, TypeToken<V> valueType) {
         return new TypeToken<Map<K, V>>(){}
             .where(new TypeParameter<K>(){}, keyType)
@@ -242,81 +300,6 @@ public final class CodecUtils {
         return ((long)days + EPOCH_AS_CQL_LONG);
     }
 
-    /**
-     * <strong>This method is not intended for use by client code.</strong>
-     * <p>
-     * Utility method to serialize user-provided values.
-     * <p>
-     * This method is useful in situations where there is no metadata available and the underlying CQL
-     * type for the values is not known.
-     * <p>
-     * This situation happens when a {@link SimpleStatement}
-     * or a {@link com.datastax.driver.core.querybuilder.BuiltStatement} (Query Builder) contain values;
-     * in these places, the driver has no way to determine the right CQL type to use.
-     * <p>
-     * This method performs a best-effort heuristic to guess which codec to use.
-     * Note that this is not particularly efficient as the codec registry needs to iterate over
-     * the registered codecs until it finds a suitable one.
-     *
-     * @param values The values to convert.
-     * @param protocolVersion The protocol version to use.
-     * @param codecRegistry The {@link CodecRegistry} to use.
-     * @return The converted values.
-     */
-    public static ByteBuffer[] convert(Object[] values, ProtocolVersion protocolVersion, CodecRegistry codecRegistry) {
-        ByteBuffer[] serializedValues = new ByteBuffer[values.length];
-        for (int i = 0; i < values.length; i++) {
-            Object value = values[i];
-            if (value == null) {
-                // impossible to locate the right codec when object is null,
-                // so forcing the result to null
-                serializedValues[i] = null;
-            } else {
-                if (value instanceof Token) {
-                    // bypass CodecRegistry for Token instances
-                    serializedValues[i] = ((Token)value).serialize(protocolVersion);
-                } else {
-                    try {
-                        TypeCodec<Object> codec = codecRegistry.codecFor(value);
-                        serializedValues[i] = codec.serialize(value, protocolVersion);
-                    } catch (Exception e) {
-                        // Catch and rethrow to provide a more helpful error message (one that include which value is bad)
-                        throw new InvalidTypeException(String.format("Value %d of type %s does not correspond to any CQL3 type", i, value.getClass()), e);
-                    }
-                }
-            }
-        }
-        return serializedValues;
-    }
-
-    /**
-     * <strong>This method is not intended for use by client code.</strong>
-     * <p>
-     * Utility method to assemble different routing key components into a single {@link ByteBuffer}.
-     * Mainly intended for statements that need to generate a routing key out of their current values.
-     *
-     * @param buffers the components of the routing key.
-     * @return A ByteBuffer containing the serialized routing key
-     */
-    public static ByteBuffer compose(ByteBuffer... buffers) {
-        if (buffers.length == 1)
-            return buffers[0];
-
-        int totalLength = 0;
-        for (ByteBuffer bb : buffers)
-            totalLength += 2 + bb.remaining() + 1;
-
-        ByteBuffer out = ByteBuffer.allocate(totalLength);
-        for (ByteBuffer buffer : buffers) {
-            ByteBuffer bb = buffer.duplicate();
-            putShortLength(out, bb.remaining());
-            out.put(bb);
-            out.put((byte)0);
-        }
-        out.flip();
-        return out;
-    }
-
     private static int sizeOfCollectionSize(ProtocolVersion version) {
         switch (version) {
             case V1:
@@ -344,11 +327,6 @@ public final class CodecUtils {
             default:
                 throw version.unsupported();
         }
-    }
-
-    private static void putShortLength(ByteBuffer bb, int length) {
-        bb.put((byte)((length >> 8) & 0xFF));
-        bb.put((byte)(length & 0xFF));
     }
 
     private static int getUnsignedShort(ByteBuffer bb) {

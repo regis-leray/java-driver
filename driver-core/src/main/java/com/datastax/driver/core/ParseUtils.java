@@ -29,9 +29,8 @@ public abstract class ParseUtils {
 
     /**
      * Valid ISO-8601 patterns for CQL timestamp literals.
-     * @see "https://cassandra.apache.org/doc/cql3/CQL-2.2.html#usingtimestamps"
      */
-    public static final String[] iso8601Patterns = new String[]{
+    private static final String[] iso8601Patterns = new String[]{
         "yyyy-MM-dd HH:mm",
         "yyyy-MM-dd HH:mm:ss",
         "yyyy-MM-dd HH:mmZ",
@@ -175,21 +174,40 @@ public abstract class ParseUtils {
         throw new IllegalArgumentException();
     }
 
-    // [0..9a..zA..Z-+._&]
+    /**
+     * Return {@code true} if the given character
+     * is allowed in a CQL identifier, that is,
+     * if it is in the range: {@code [0..9a..zA..Z-+._&]}.
+     *
+     * @param c The character to inspect.
+     * @return {@code true} if the given character
+     * is allowed in a CQL identifier, {@code false} otherwise.
+     */
     public static boolean isIdentifierChar(int c) {
         return (c >= '0' && c <= '9')
             || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
             || c == '-' || c == '+' || c == '.' || c == '_' || c == '&';
     }
 
-    // [ \t\n]
+    /**
+     * Return {@code true} if the given character
+     * is a valid whitespace character in CQL, that is,
+     * if it is a regular space, a tabulation sign,
+     * or a new line sign.
+     *
+     * @param c The character to inspect.
+     * @return {@code true} if the given character
+     * is a valid whitespace character, {@code false} otherwise.
+     */
     public static boolean isBlank(int c) {
         return c == ' ' || c == '\t' || c == '\n';
     }
     
     /**
      * Check whether the given string corresponds
-     * to a valid CQL integer literal.
+     * to a valid CQL long literal.
+     * Long literals are composed solely by digits,
+     * but can have an optional leading minus sign.
      *
      * @param str The string to inspect.
      * @return {@code true} if the given string corresponds
@@ -221,9 +239,9 @@ public abstract class ParseUtils {
 
 
     /**
-     * Quote the given string.
+     * Quote the given string; single quotes are escaped.
      *
-     * @param value The value to quote; single quotes are escaped.
+     * @param value The value to quote.
      * @return The quoted string.
      */
     public static String quote(String value) {
@@ -231,9 +249,9 @@ public abstract class ParseUtils {
     }
 
     /**
-     * Unquote the given string.
+     * Unquote the given string; single quotes are unescaped.
      *
-     * @param value The string to unquote; single quotes are unescaped.
+     * @param value The string to unquote.
      * @return The unquoted string.
      */
     public static String unquote(String value) {
@@ -246,6 +264,8 @@ public abstract class ParseUtils {
      * This method is adapted from Apache Commons {@code DateUtils.parseStrictly()} method (that is used Cassandra side
      * to parse date strings)..
      *
+     * @see <a href="https://cassandra.apache.org/doc/cql3/CQL-2.2.html#usingtimestamps">Working with timestamps</a>
+     * section of CQL specification.
      * @throws ParseException If the given string is not a valid ISO-8601 date.
      */
     public static Date parseDate(String str) throws ParseException {
@@ -256,7 +276,7 @@ public abstract class ParseUtils {
         // Java 6 has very limited support for ISO-8601 time zone formats,
         // so we need to transform the string first
         // so that accepted patterns are correctly handled,
-        // such as Z for UTC or "+00:00" instead of "+0000".
+        // such as Z for UTC, or "+00:00" instead of "+0000".
         // Note: we cannot use the X letter in the pattern
         // because it has been introduced in Java 7.
         str = str.replaceAll("(\\+|\\-)(\\d\\d):(\\d\\d)$", "$1$2$3");
@@ -279,12 +299,23 @@ public abstract class ParseUtils {
      * This method is adapted from Apache Commons {@code DateUtils.parseStrictly()} method (that is used Cassandra side
      * to parse date strings)..
      *
+     * @see <a href="https://cassandra.apache.org/doc/cql3/CQL-2.2.html#usingtimestamps">Working with timestamps</a>
+     * section of CQL specification.
      * @throws ParseException If the given string cannot be parsed with the given pattern.
      */
     public static Date parseDate(String str, String pattern) throws ParseException {
         SimpleDateFormat parser = new SimpleDateFormat();
         parser.setLenient(false);
+        // set a default timezone for patterns that do not provide one
         parser.setTimeZone(TimeZone.getTimeZone("UTC"));
+        // Java 6 has very limited support for ISO-8601 time zone formats,
+        // so we need to transform the string first
+        // so that accepted patterns are correctly handled,
+        // such as Z for UTC, or "+00:00" instead of "+0000".
+        // Note: we cannot use the X letter in the pattern
+        // because it has been introduced in Java 7.
+        str = str.replaceAll("(\\+|\\-)(\\d\\d):(\\d\\d)$", "$1$2$3");
+        str = str.replaceAll("Z$", "+0000");
         ParsePosition pos = new ParsePosition(0);
         parser.applyPattern(pattern);
         pos.setIndex(0);
@@ -303,6 +334,8 @@ public abstract class ParseUtils {
      * @param str The string to parse.
      * @return A long value representing the number of nanoseconds since midnight.
      * @throws ParseException if the string cannot be parsed.
+     * @see <a href="https://cassandra.apache.org/doc/cql3/CQL-2.2.html#usingtime">Working with time</a>
+     * section of CQL specification.
      */
     public static long parseTime(String str) throws ParseException {
         String nanos_s;
@@ -369,6 +402,8 @@ public abstract class ParseUtils {
      *
      * @param value A long value representing the number of nanoseconds since midnight.
      * @return The formatted value.
+     * @see <a href="https://cassandra.apache.org/doc/cql3/CQL-2.2.html#usingtime">Working with time</a>
+     * section of CQL specification.
      */
     public static String formatTime(long value) {
         int nano = (int)(value % 1000000000);

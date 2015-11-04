@@ -549,8 +549,7 @@ public abstract class TypeCodec<T> {
      * codecs handling parameterized types, such as collection types, must override
      * this method and perform some sort of "manual"
      * inspection of the actual type parameters.</li>
-     * <li>Similarly, codecs that only accept a partial subset of all possible values,
-     * such as {@link TimeUUIDCodec} or {@link AsciiCodec}, must override
+     * <li>Similarly, codecs that only accept a partial subset of all possible values must override
      * this method and manually inspect the object to check if it
      * complies or not with the codec's limitations.</li>
      * </ol>
